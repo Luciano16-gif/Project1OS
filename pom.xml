@@ -9,6 +9,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>23</maven.compiler.source>
         <maven.compiler.target>23</maven.compiler.target>
-        <exec.mainClass>com.mycompany.project1os.Project1OS</exec.mainClass>
+        <exec.mainClass>ve.edu.unimet.so.proyecto1.Project1OS</exec.mainClass>
     </properties>
 </project>
