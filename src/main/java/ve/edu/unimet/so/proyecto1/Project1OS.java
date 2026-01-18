@@ -3,8 +3,9 @@
  */
 
 package ve.edu.unimet.so.proyecto1;
+import ve.edu.unimet.so.proyecto1.datastructures.DataStructuresTest;
 
-import ve.edu.unimet.so.proyecto1.datastructures.LinkedQueue;
+
 /**
  *
  * @author chano
@@ -12,14 +13,6 @@ import ve.edu.unimet.so.proyecto1.datastructures.LinkedQueue;
 public class Project1OS {
 
     public static void main(String[] args) {
-        LinkedQueue<Integer> queue = new LinkedQueue<>();
-        queue.enqueue(1);
-        queue.enqueue(2);
-        queue.enqueue(3);
-        System.out.println(queue.peek());
-        System.out.println(queue.dequeue());
-        System.out.println(queue.dequeue());
-        queue.clear();
-        System.out.println(queue.isEmpty());
+        DataStructuresTest.runAll();
     }
 }

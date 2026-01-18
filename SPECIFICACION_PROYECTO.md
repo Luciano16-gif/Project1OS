@@ -1,4 +1,4 @@
-# Simulador RTOS (Microsatélite) — Especificación Inicial (v0.1)
+# Simulador RTOS (Microsatélite) — Especificación Inicial (v0.2)
 
 Documento interno para que estemos en la misma página, sujeto a cambios.  
 Proyecto: `Project1OS` (NetBeans + Java 23 + Maven).
@@ -111,11 +111,15 @@ Definir un desempate estable; propuesta:
 ## 6) Estructuras de datos (sin java.util collections)
 ### 6.1 Ya implementado
 - `ve.edu.unimet.so.proyecto1.datastructures.LinkedQueue<T>` (FIFO O(1) enqueue/dequeue).
+- `ve.edu.unimet.so.proyecto1.datastructures.SimpleList<T>` (arreglo dinámico básico con `toArray()` y `forEach()`).
+- `ve.edu.unimet.so.proyecto1.datastructures.OrderedList<T>` (arreglo ordenado por `Comparator` con inserción O(n)).
+- `ve.edu.unimet.so.proyecto1.datastructures.Compare.Comparator<T>` (comparador mínimo propio).
+- `ve.edu.unimet.so.proyecto1.datastructures.DataStructuresTest` (tests básicos de listas).
 
 ### 6.2 Por implementar (mínimo viable)
-- `SortedLinkedList<T>` (o `OrderedQueue<T>`): inserción ordenada O(n) para mantener `READY` ordenado en EDF/SRT/Prioridad.
+- Estructura ordenada para colas READY si se necesita versión enlazada (alternativa a `OrderedList<T>` actual).
+  - Idea: `OrderedLinkedQueue<T>` con inserción O(n) y `poll()` en O(1) desde head.
   - Ventaja: simple y suficiente para 20–200 procesos.
-  - `poll()` del “mejor” en O(1) (sacando head).
 
 ### 6.3 Necesidad para GUI
 Las colas/listas deben permitir “ver su contenido” sin exponer nodos:
@@ -219,9 +223,10 @@ esto es mas que nada para tenerlo a la mano pq siempre se me olvida
 - ¿Qué librería prefieren/permiten para JSON/CSV específicamente?
 - ¿Qué hacer con un proceso que pierde deadline? (marcar “fallido y terminar”, o “fail-soft” y dejarlo correr)
 
-## 14) Estado actual del repo (al 2026-01-17)
-- Existe `LinkedQueue<T>` en `src/main/java/ve/edu/unimet/so/proyecto1/datastructures/LinkedQueue.java`.
-- `main()` actual es solo prueba de cola; luego se reemplaza por arranque de GUI.
+## 14) Estado actual del repo (al 2026-01-18)
+- Implementadas estructuras propias: `LinkedQueue<T>`, `SimpleList<T>`, `OrderedList<T>` y `Compare.Comparator<T>`.
+- Existe `DataStructuresTest` para pruebas básicas de listas.
+- `main()` actual ejecuta `DataStructuresTest.runAll()`; luego se reemplaza por arranque de GUI.
 
 Lo mejor sera que estemos actualizando esto a medida que hacemos prs, para que tengamos un acceso facil a estar al dia,
 por lo que antes de subir cambios al github hay que asegurarnos de actualizar este archivo con lo necesario, la version
