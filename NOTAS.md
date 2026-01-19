@@ -1,14 +1,14 @@
 # NOTAS
 
-Notas internas del proyecto. Estas secciones estaban en la especificacion v0.2 y se movieron aqui para mantener el spec limpio.
+Notas internas del proyecto.
 
 ## Git workflow (lo que pide el profesor)
-Lo que piden NO es complicado: es basicamente un flujo tipo "equipo real", esperemos que el github como tal no tenga problemas como en sistemas de info.
+Lo que piden NO es complicado: es basicamente un flujo tipo "equipo real".
 
 ### Ramas
 - `main`: siempre estable (lo que "se entrega").
 - `develop`: integracion diaria.
-- `feat/...`, `fix/...`, `documentation/...`: ramas de trabajo para PRs.
+- `feat/...`, `fix/...`, `docs/...`: ramas de trabajo para PRs.
 
 ### Como trabajamos (regla simple)
 1) Cada tarea vive en una rama propia (ej: `feat/scheduler-edf`).
@@ -30,21 +30,34 @@ git checkout -b feat/gui-queues
 git push -u origin feat/gui-queues
 ```
 
-Esto es mas que nada para tenerlo a la mano porque siempre se me olvida.
-
 ### Commits
 - Mensajes descriptivos: `feat: ...`, `fix: ...`, `docs: ...`
-- Evitar commits gigantes; preferir pequenos y frecuentes.
+- Evitar commits gigantes; preferir pequeños y frecuentes.
 
-## Preguntas abiertas (para confirmar con profesores o preparadoras)
-- Que rango esperan para `maxProcesosEnMemoria`? (si no lo dan, lo dejamos configurable)
-- Que libreria prefieren/permiten para JSON/CSV especificamente?
-- Que hacer con un proceso que pierde deadline? (marcar "fallido y terminar", o "fail-soft" y dejarlo correr)
+## Preguntas abiertas / Dudas
+- [ ] **Rango de memoria:** Que rango esperan para `maxProcesosEnMemoria`? (Pendiente preguntar. Por defecto usamos 5).
+- [ ] **Libreria JSON:** ¿Cuál prefieren? (Probablemente usaremos una simple como `org.json` o parseo manual si se ponen estrictos).
+- [x] **Deadline Miss:** ¿Matar o seguir? -> **Resuelto:** La Spec v0.2.1 define "Fail-soft". El proceso sigue, solo se marca el flag `deadlineMissed`.
 
-## Estado actual del repo (al 2026-01-18)
-- Implementadas estructuras propias: `LinkedQueue<T>`, `SimpleList<T>`, `OrderedList<T>` y `Compare.Comparator<T>`.
-- Existe `DataStructuresTest` para pruebas basicas de listas.
-- `main()` actual ejecuta `DataStructuresTest.runAll()`; luego se reemplaza por arranque de GUI.
+## Estado actual del repo (al 2026-01-18 - v0.2.1)
+**Estructuras de Datos:**
+- [x] Propias: `LinkedQueue`, `SimpleList`, `OrderedList`.
+- [x] Tests básicos (`DataStructuresTest`) pasando.
+
+**Modelos y Kernel:**
+- [x] `PCB` actualizado (campos de I/O, métricas, deadline flags).
+- [x] `ProcessState` (7 estados incluyendo suspendidos).
+- [x] `PeriodicTaskTemplate` para generar trabajos repetitivos.
+- [x] `OperatingSystem` (Kernel v0.2.1):
+    - Admisión de procesos (New -> Ready o New -> Suspended).
+    - Lógica de Scheduler (FCFS, RR, SRT, EDF, Prioridad).
+    - Cambio dinámico de algoritmos (reordenamiento de colas).
+    - Detección de bloqueos por I/O.
+
+**Pendiente (Siguientes pasos):**
+- [ ] Crear `ClockThread` (el motor que llama a `executeOneCycle`).
+- [ ] Interfaz Gráfica (GUI) para ver esto funcionando.
 
 ## Nota de mantenimiento
-Lo mejor sera que estemos actualizando NOTAS.md y si es necesario ESPECIFICACION_PROYECTO.md a medida que hacemos PRs, para que tengamos un acceso facil a estar al dia. Antes de subir cambios a GitHub hay que asegurarnos de actualizar este archivo con lo necesario. La version la puse por ser fancy realmente, pero puede ser util para llevar un control mas de lo que estamos haciendo (aunq eso ya lo podamos hacer a traves de git).
+Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.
+```
