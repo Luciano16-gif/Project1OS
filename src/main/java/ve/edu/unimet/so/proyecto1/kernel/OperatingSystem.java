@@ -27,7 +27,7 @@ public class OperatingSystem {
     private int cpuQuantumTicks; // Contador de uso de quantum actual
     
     // Estructuras
-    private final LinkedQueue<PCB> newQueue; // Por ahora no la usamos mucho, directo a Ready
+    private final LinkedQueue<PCB> newQueue; //Por ahora no la usamos mucho, directo a Ready
     private final LinkedQueue<PCB> readyQueueFIFO;
     private OrderedList<PCB> readyListSorted; 
     private final SimpleList<PCB> blockedList;

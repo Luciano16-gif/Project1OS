@@ -1,14 +1,14 @@
 # NOTAS
 
-Notas internas del proyecto. Estas secciones estaban en la especificacion v0.2 y se movieron aqui para mantener el spec limpio.
+Notas internas del proyecto.
 
 ## Git workflow (lo que pide el profesor)
-Lo que piden NO es complicado: es basicamente un flujo tipo "equipo real", esperemos que el github como tal no tenga problemas como en sistemas de info.
+Lo que piden NO es complicado: es basicamente un flujo tipo "equipo real".
 
 ### Ramas
 - `main`: siempre estable (lo que "se entrega").
 - `develop`: integracion diaria.
-- `feat/...`, `fix/...`, `documentation/...`: ramas de trabajo para PRs.
+- `feat/...`, `fix/...`, `docs/...`: ramas de trabajo para PRs.
 
 ### Como trabajamos (regla simple)
 1) Cada tarea vive en una rama propia (ej: `feat/scheduler-edf`).
@@ -30,21 +30,136 @@ git checkout -b feat/gui-queues
 git push -u origin feat/gui-queues
 ```
 
-Esto es mas que nada para tenerlo a la mano porque siempre se me olvida.
-
 ### Commits
 - Mensajes descriptivos: `feat: ...`, `fix: ...`, `docs: ...`
-- Evitar commits gigantes; preferir pequenos y frecuentes.
+- Evitar commits gigantes; preferir pequeños y frecuentes.
 
-## Preguntas abiertas (para confirmar con profesores o preparadoras)
-- Que rango esperan para `maxProcesosEnMemoria`? (si no lo dan, lo dejamos configurable)
-- Que libreria prefieren/permiten para JSON/CSV especificamente?
-- Que hacer con un proceso que pierde deadline? (marcar "fallido y terminar", o "fail-soft" y dejarlo correr)
+## Preguntas abiertas / Dudas
+- [ ] **Rango de memoria:** Que rango esperan para `maxProcesosEnMemoria`? (Pendiente preguntar. Por defecto usamos 5).
+- [ ] **Libreria JSON:** ¿Cuál prefieren? (Probablemente usaremos una simple como `org.json` o parseo manual si se ponen estrictos).
+- [x] **Deadline Miss:** ¿Matar o seguir? -> **Resuelto:** La Spec v0.2.1 define "Fail-soft". El proceso sigue, solo se marca el flag `deadlineMissed`.
 
-## Estado actual del repo (al 2026-01-18)
-- Implementadas estructuras propias: `LinkedQueue<T>`, `SimpleList<T>`, `OrderedList<T>` y `Compare.Comparator<T>`.
-- Existe `DataStructuresTest` para pruebas basicas de listas.
-- `main()` actual ejecuta `DataStructuresTest.runAll()`; luego se reemplaza por arranque de GUI.
+## Estado actual del repo (al 2026-01-19)
+**Estructuras de Datos:**
+- [x] Propias: `LinkedQueue`, `SimpleList`, `OrderedList`.
+- [x] Tests básicos (`DataStructuresTest`) pasando.
+
+**Modelos y Kernel:**
+- [x] `PCB` base (identidad, PC/MAR, prioridad, arrival/deadline, I/O simple).
+- [x] `ProcessState` (7 estados incluyendo suspendidos).
+- [ ] `PeriodicTaskTemplate` (no existe en el código actual).
+- [x] `OperatingSystem` base:
+    - Cola FIFO para FCFS/RR y lista ordenada para SRT/EDF/Prioridad.
+    - Cambio dinámico de algoritmo (reordena la cola READY).
+    - Aún no maneja admisión NEW, swapping, I/O real ni preemptividad en SRT/EDF/Prioridad.
+
+**Pendiente (Siguientes pasos):**
+- [ ] Crear `ClockThread` (el motor que llama a `executeOneCycle`).
+- [ ] Interfaz Gráfica (GUI) para ver esto funcionando.
+
+## Plan de correcciones (scheduler y base)
+Objetivo: arreglar el codigo actual para que sea correcto, mantenible y listo para seguir creciendo sin rework.
+
+### Flujo de ramas recomendado
+- Crear una rama dedicada para estos arreglos (ej: `fix/scheduler-preemption` o `refactor/scheduler-core`).
+- Trabajar ahi y hacer PR hacia `feat/process-model`.
+- Cuando este validado, PR de `feat/process-model` -> `develop`.
+- Esto deja trazabilidad clara y evita mezclar arreglos con otras features.
+
+### 1) Refactor de politicas: usar `enum` en vez de `int`
+**Problema:** `currentAlgorithm` como `int` permite valores invalidos y rompe exhaustividad en `switch`.
+**Solucion:** crear un `enum SchedulingPolicy` y usarlo en todo el kernel.
+
+Snippet sugerido:
+```java
+public enum SchedulingPolicy { FCFS, RR, SRT, PRIORITY, EDF }
+```
+
+Cambios recomendados:
+- Reemplazar `ALG_*` por `SchedulingPolicy`.
+- `private SchedulingPolicy currentPolicy;`
+- `setAlgorithm(SchedulingPolicy policy)` y actualizar el `switch`.
+- En GUI, mapear el combo directamente a `SchedulingPolicy`.
+
+### 2) Preemptividad real en SRT / PRIORITY / EDF
+**Problema:** actualmente solo hay cambio de proceso cuando CPU queda libre o por quantum (RR).  
+**Solucion:** en cada tick, antes de ejecutar instruccion, comparar CPU vs mejor READY.
+
+Snippet sugerido (dentro de `executeOneCycle()`):
+```java
+if (cpu == null) {
+    scheduleNextProcess();
+} else if (isPreemptivePolicy()) {
+    PCB bestReady = readyListSorted.peekFirst();
+    if (bestReady != null && getComparator().compare(bestReady, cpu) < 0) {
+        preemptCurrentProcess();
+        scheduleNextProcess();
+    }
+}
+```
+
+Helpers recomendados:
+```java
+private boolean isPreemptivePolicy() {
+    return currentPolicy == SchedulingPolicy.SRT
+        || currentPolicy == SchedulingPolicy.PRIORITY
+        || currentPolicy == SchedulingPolicy.EDF;
+}
+
+private Compare.Comparator<PCB> getComparator() {
+    return switch (currentPolicy) {
+        case PRIORITY -> priorityComparator;
+        case EDF -> edfComparator;
+        default -> srtComparator;
+    };
+}
+```
+
+### 3) Comparadores con desempates (tie-breakers) estables
+**Problema:** comparadores actuales solo usan 1 campo; empates dan orden no determinista.  
+**Solucion:** encadenar comparaciones segun la especificacion (deadline/priority/arrival/id).
+
+Ejemplo EDF (deadline asc, priority desc, arrival asc, pid asc):
+```java
+private int compareEdf(PCB a, PCB b) {
+    int c = Long.compare(a.getDeadlineTick(), b.getDeadlineTick());
+    if (c != 0) return c;
+    c = Integer.compare(b.getPriority(), a.getPriority());
+    if (c != 0) return c;
+    c = Long.compare(a.getArrivalTick(), b.getArrivalTick());
+    if (c != 0) return c;
+    return Integer.compare(a.getPid(), b.getPid());
+}
+```
+
+### 4) Cambio dinamico de algoritmo respetando FIFO real
+**Problema:** al cambiar de SRT/EDF/PRIORITY -> FCFS/RR, el orden FIFO queda sesgado.  
+**Solucion:** al pasar a FCFS/RR, reconstruir FIFO usando `arrivalTick` y `pid`.
+
+Idea sin usar Collections:
+1) Drenar READY a `SimpleList`.
+2) Insertar en un `OrderedList<PCB>` con comparador por arrival/pid.
+3) Pasar del OrderedList a `readyQueueFIFO` en orden.
+
+Comparador sugerido:
+```java
+private final Compare.Comparator<PCB> fifoComparator =
+    (a, b) -> {
+        int c = Long.compare(a.getArrivalTick(), b.getArrivalTick());
+        return (c != 0) ? c : Integer.compare(a.getPid(), b.getPid());
+    };
+```
+
+### 5) Tipos de tiempo consistentes
+**Problema:** `globalTick` es `int`, pero arrival/deadline en PCB son `long`.  
+**Solucion:** cambiar `globalTick` a `long` y ajustar getters/operaciones.
+
+### 6) Checklist de validacion rapida (manual)
+- SRT: un proceso corto nuevo debe preemptar al largo en el siguiente tick.
+- PRIORITY: uno de mayor prioridad debe preemptar a uno menor.
+- EDF: el de deadline mas cercano debe preemptar.
+- Cambio de politica: al pasar a FCFS, la cola queda en orden de `arrivalTick`.
 
 ## Nota de mantenimiento
-Lo mejor sera que estemos actualizando NOTAS.md y si es necesario ESPECIFICACION_PROYECTO.md a medida que hacemos PRs, para que tengamos un acceso facil a estar al dia. Antes de subir cambios a GitHub hay que asegurarnos de actualizar este archivo con lo necesario. La version la puse por ser fancy realmente, pero puede ser util para llevar un control mas de lo que estamos haciendo (aunq eso ya lo podamos hacer a traves de git).
+Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.
+```
