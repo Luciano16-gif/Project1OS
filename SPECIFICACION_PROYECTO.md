@@ -4,6 +4,7 @@ Documento interno para que estemos en la misma página, sujeto a cambios.
 Proyecto: `Project1OS` (NetBeans + Java 23 + Maven).
 Hice una revision despues de poder hablar con alguien que me dio unos consejos
 
+
 ## 1) Objetivo
 
 Construir un simulador de Sistema Operativo en Tiempo Real (RTOS) para un microsatélite que permita:
