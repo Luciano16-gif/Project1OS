@@ -4,16 +4,6 @@ Documento interno para que estemos en la misma página, sujeto a cambios.
 Proyecto: `Project1OS` (NetBeans + Java 23 + Maven).
 Hice una revision despues de poder hablar con alguien que me dio unos consejos
 
-## Cambios principales vs v0.2
-
-- Alineé nombres de estructuras a lo que ya tienen (SimpleList, OrderedList, LinkedQueue).
-- Añadí nota de cumplimiento sobre “no colecciones” y el caso Swing/JDK interno.
-- Aclaré interpretación “excepción retorna al procesador” para evitar discusiones con el profesor.
-- Refiné periodicidad para que sea MVP y controlado (sin crecimiento infinito).
-- Separé utilización total vs utilización user-only (para evitar debates).
-- Definí una lista mínima de tipos de eventos y reglas de locks (para evitar deadlocks).
-
----
 
 ## 1) Objetivo
 
