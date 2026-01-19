@@ -162,4 +162,4 @@ private final Compare.Comparator<PCB> fifoComparator =
 
 ## Nota de mantenimiento
 Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.
-```
+
