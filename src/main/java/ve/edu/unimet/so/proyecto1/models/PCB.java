@@ -31,6 +31,22 @@ public class PCB {
     private long waitingTime = 0;
 
     public PCB(int pid, String name, int totalInstructions, int priority, long arrivalTick, long deadlineTick, int ioEventCycle, int ioServiceDuration) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name must not be null/blank");
+        }
+        if (totalInstructions <= 0) {
+            throw new IllegalArgumentException("totalInstructions must be > 0");
+        }
+        if (deadlineTick < arrivalTick) {
+            throw new IllegalArgumentException("deadlineTick must be >= arrivalTick");
+        }
+        if (ioEventCycle < -1 || ioEventCycle > totalInstructions || ioEventCycle == 0) {
+            throw new IllegalArgumentException("ioEventCycle must be -1 or in [1, totalInstructions]");
+        }
+        if (ioServiceDuration < 0) {
+            throw new IllegalArgumentException("ioServiceDuration must be >= 0");
+        }
+
         this.pid = pid;
         this.name = name;
         this.totalInstructions = totalInstructions;
@@ -51,7 +67,12 @@ public class PCB {
     public int getPid() { return pid; }
     public String getName() { return name; }
     public ProcessState getState() { return state; }
-    public void setState(ProcessState state) { this.state = state; }
+    public void setState(ProcessState state) {
+        if (state == null) {
+            throw new IllegalArgumentException("state must not be null");
+        }
+        this.state = state;
+    }
 
     public int getProgramCounter() { return programCounter; }
     public int getMar() { return mar; }
@@ -109,6 +130,7 @@ public class PCB {
     }
 
     public boolean shouldTriggerIO() {
+        // Expected to be checked AFTER executeCycle() for the current tick.
         return ioEventCycle != -1 && programCounter == ioEventCycle;
     }
     

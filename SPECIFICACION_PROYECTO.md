@@ -288,6 +288,12 @@ En cada tick de ejecución de una instrucción:
   - decrementar ioTriggerCountdown
   - si llega a 0 → publicar evento IO_REQUEST(pcbId) y resetear contador
 
+**Nota de semántica (evitar ambigüedad):**
+- El countdown se evalúa **después** de ejecutar la instrucción del tick (PC/MAR ya incrementaron).
+- `ioEveryTicks` se interpreta como conteo 1-based de instrucciones ejecutadas desde el último I/O.
+- `ioEveryTicks = 1` implica bloqueo inmediatamente **después** de la primera instrucción.
+- No existe “I/O en ciclo 0” antes de ejecutar una instrucción.
+
 ### 10.2 Manejo en kernel
 
 Al procesar IO_REQUEST:
