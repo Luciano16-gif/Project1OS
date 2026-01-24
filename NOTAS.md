@@ -1,14 +1,14 @@
 # NOTAS
 
-Notas internas del proyecto. Estas secciones estaban en la especificacion v0.2 y se movieron aqui para mantener el spec limpio.
+Notas internas del proyecto.
 
 ## Git workflow (lo que pide el profesor)
-Lo que piden NO es complicado: es basicamente un flujo tipo "equipo real", esperemos que el github como tal no tenga problemas como en sistemas de info.
+Lo que piden NO es complicado: es basicamente un flujo tipo "equipo real".
 
 ### Ramas
 - `main`: siempre estable (lo que "se entrega").
 - `develop`: integracion diaria.
-- `feat/...`, `fix/...`, `documentation/...`: ramas de trabajo para PRs.
+- `feat/...`, `fix/...`, `docs/...`: ramas de trabajo para PRs.
 
 ### Como trabajamos (regla simple)
 1) Cada tarea vive en una rama propia (ej: `feat/scheduler-edf`).
@@ -30,21 +30,58 @@ git checkout -b feat/gui-queues
 git push -u origin feat/gui-queues
 ```
 
-Esto es mas que nada para tenerlo a la mano porque siempre se me olvida.
+Eliminar rama local:
+```bash
+git branch -d nombre-rama
+```
+
+Eliminar rama remota:
+```bash
+git push origin --delete nombre-rama
+```
 
 ### Commits
 - Mensajes descriptivos: `feat: ...`, `fix: ...`, `docs: ...`
-- Evitar commits gigantes; preferir pequenos y frecuentes.
+- Evitar commits gigantes; preferir pequeños y frecuentes.
 
-## Preguntas abiertas (para confirmar con profesores o preparadoras)
-- Que rango esperan para `maxProcesosEnMemoria`? (si no lo dan, lo dejamos configurable)
-- Que libreria prefieren/permiten para JSON/CSV especificamente?
-- Que hacer con un proceso que pierde deadline? (marcar "fallido y terminar", o "fail-soft" y dejarlo correr)
+## Preguntas abiertas / Dudas
+- [x] **Rango de memoria:** Decidido por el equipo. Sugerencia inicial: `maxProcessesInMemory` configurable con default bajo (6–8) para forzar swapping.
+- [x] **Carga JSON/CSV:** Ya no es requisito. El sistema debe iniciar con procesos generados automáticamente.
+- [ ] **Deadline Miss:** Pendiente confirmar con la preparadora. Mientras tanto seguimos fail-soft (no se mata; solo se marca `deadlineMissed`).
 
-## Estado actual del repo (al 2026-01-18)
-- Implementadas estructuras propias: `LinkedQueue<T>`, `SimpleList<T>`, `OrderedList<T>` y `Compare.Comparator<T>`.
-- Existe `DataStructuresTest` para pruebas basicas de listas.
-- `main()` actual ejecuta `DataStructuresTest.runAll()`; luego se reemplaza por arranque de GUI.
+## Estado actual del repo (al 2026-01-19)
+**Estructuras de Datos:**
+- [x] Propias: `LinkedQueue`, `SimpleList`, `OrderedList`.
+- [x] Tests básicos (`DataStructuresTest`) pasando.
+
+**Modelos y Kernel:**
+- [x] `PCB` base (identidad, PC/MAR, prioridad, arrival/deadline, I/O simple).
+- [x] `ProcessState` (7 estados incluyendo suspendidos).
+- [ ] `PeriodicTaskTemplate` (no existe en el código actual).
+- [x] `OperatingSystem` base:
+    - Cola FIFO para FCFS/RR y lista ordenada para SRT/EDF/Prioridad.
+    - Cambio dinámico de algoritmo (reordena la cola READY).
+    - Aún no maneja admisión NEW, swapping, I/O real ni preemptividad en SRT/EDF/Prioridad.
+
+**Pendiente (Siguientes pasos):**
+- [ ] Crear `ClockThread` (el motor que llama a `executeOneCycle`).
+- [ ] Interfaz Gráfica (GUI) para ver esto funcionando.
+
+## Próximas ramas / features
+- `feat/process-admission`: admisión NEW → READY/SUSPENDED, límite de memoria y swap-in/out.
+- `feat/io-blocking`: manejo I/O (bloqueo, IODeviceThread, retorno a READY).
+- `feat/interrupts`: interrupciones externas + ISR ticks.
+- `feat/gui-queues`: tablas, snapshots y log en Swing.
+
+## Plan de correcciones (scheduler y base)
+Objetivo: arreglar el codigo actual para que sea correcto, mantenible y listo para seguir creciendo sin rework.
+
+### Flujo de ramas recomendado
+- Crear una rama dedicada para estos arreglos (ej: `fix/scheduler-preemption` o `refactor/scheduler-core`).
+- Trabajar ahi y hacer PR hacia `feat/process-model`.
+- Cuando este validado, PR de `feat/process-model` -> `develop`.
+- Esto deja trazabilidad clara y evita mezclar arreglos con otras features.
 
 ## Nota de mantenimiento
-Lo mejor sera que estemos actualizando NOTAS.md y si es necesario ESPECIFICACION_PROYECTO.md a medida que hacemos PRs, para que tengamos un acceso facil a estar al dia. Antes de subir cambios a GitHub hay que asegurarnos de actualizar este archivo con lo necesario. La version la puse por ser fancy realmente, pero puede ser util para llevar un control mas de lo que estamos haciendo (aunq eso ya lo podamos hacer a traves de git).
+Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.
+

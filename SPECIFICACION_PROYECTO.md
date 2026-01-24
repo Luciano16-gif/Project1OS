@@ -32,7 +32,7 @@ Meta principal: ser demostrable, estable y evaluable en menos de 5 semanas, evit
   - No usar: ArrayList, LinkedList, Queue, Stack, Vector, Map, Set, etc.
 - Librerías externas permitidas solo para:
   - Gráficas (charts)
-  - Carga JSON/CSV
+  - (Opcional) Carga JSON/CSV si se decide implementarla
 
 ### 2.1 Nota de cumplimiento (importante para evitar “puntos perdidos”)
 
@@ -58,6 +58,7 @@ Swing/JDK puede usar estructuras internas (ej. Vector) dentro del framework, per
 - La preempción “inmediata” se aplica en frontera de tick (antes de la siguiente instrucción).
 - Deadline es absoluta en ticks (deadlineTick).
 - “Memoria” se modela como máximo de procesos residentes (sin memoria real).
+- El sistema inicia con un conjunto de procesos generados automáticamente (sin archivos).
 
 ---
 
@@ -180,6 +181,7 @@ Cambiar política en ejecución:
 - **SRT:** preemptivo si existe otro con menor remainingInstructions.
 - **PRIORITY:** preemptivo por mayor prioridad.
 - **EDF:** preemptivo por deadline más próxima.
+  - **Nota:** la preempción depende solo del criterio principal; los tie-breakers aplican solo al orden de READY.
 
 ### 7.3 Empates (tie-breakers estables)
 
@@ -287,6 +289,12 @@ En cada tick de ejecución de una instrucción:
 - si ioEveryTicks > 0:
   - decrementar ioTriggerCountdown
   - si llega a 0 → publicar evento IO_REQUEST(pcbId) y resetear contador
+
+**Nota de semántica (evitar ambigüedad):**
+- El countdown se evalúa **después** de ejecutar la instrucción del tick (PC/MAR ya incrementaron).
+- `ioEveryTicks` se interpreta como conteo 1-based de instrucciones ejecutadas desde el último I/O.
+- `ioEveryTicks = 1` implica bloqueo inmediatamente **después** de la primera instrucción.
+- No existe “I/O en ciclo 0” antes de ejecutar una instrucción.
 
 ### 10.2 Manejo en kernel
 
@@ -418,7 +426,7 @@ No usar DefaultTableModel. Usar:
 - Start / Pause / Step (opcional pero recomendado para demo)
 - Selector algoritmo
 - cycleDurationMs, quantumTicks, maxProcessesInMemory
-- Botones: generar 20, agregar emergencia, load JSON, load CSV
+- Botones: generar 20, agregar emergencia
 
 ### 13.4 Seguridad de hilo (Swing)
 
@@ -451,6 +459,7 @@ Cada tick:
   - log 1 vez: “Deadline miss…”
 
 El proceso continúa, pero cuenta como fallo de misión.
+**Nota:** decisión final pendiente; por defecto se mantiene fail-soft hasta confirmación.
 
 ---
 
@@ -489,8 +498,10 @@ Waiting time:
 
 ---
 
-## 17) Carga desde archivos (JSON/CSV)
+## 17) Carga desde archivos (JSON/CSV) — opcional (no requerida)
 
+No es requisito implementar carga desde archivos.  
+Si se decide implementarla:
 - CSV: parsing manual con BufferedReader (sin colecciones).
 - JSON: librería que deserialice a arreglos (ProcessSpec[]), no List.
 - Procesos cargados → NEW.
