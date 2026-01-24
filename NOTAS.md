@@ -30,6 +30,16 @@ git checkout -b feat/gui-queues
 git push -u origin feat/gui-queues
 ```
 
+Eliminar rama local:
+```bash
+git branch -d nombre-rama
+```
+
+Eliminar rama remota:
+```bash
+git push origin --delete nombre-rama
+```
+
 ### Commits
 - Mensajes descriptivos: `feat: ...`, `fix: ...`, `docs: ...`
 - Evitar commits gigantes; preferir pequeños y frecuentes.
@@ -56,6 +66,12 @@ git push -u origin feat/gui-queues
 **Pendiente (Siguientes pasos):**
 - [ ] Crear `ClockThread` (el motor que llama a `executeOneCycle`).
 - [ ] Interfaz Gráfica (GUI) para ver esto funcionando.
+
+## Próximas ramas / features
+- `feat/process-admission`: admisión NEW → READY/SUSPENDED, límite de memoria y swap-in/out.
+- `feat/io-blocking`: manejo I/O (bloqueo, IODeviceThread, retorno a READY).
+- `feat/interrupts`: interrupciones externas + ISR ticks.
+- `feat/gui-queues`: tablas, snapshots y log en Swing.
 
 ## Plan de correcciones (scheduler y base)
 Objetivo: arreglar el codigo actual para que sea correcto, mantenible y listo para seguir creciendo sin rework.
