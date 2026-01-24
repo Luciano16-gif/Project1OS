@@ -12,15 +12,9 @@ import ve.edu.unimet.so.proyecto1.models.ProcessState;
 
 public class OperatingSystem {
 
-    public static final int ALG_FCFS = 0;
-    public static final int ALG_RR = 1;
-    public static final int ALG_SRT = 2;
-    public static final int ALG_PRIORITY = 3;
-    public static final int ALG_EDF = 4;
-
     private long globalTick;
     private int quantum;
-    private int currentAlgorithm;
+    private SchedulingPolicy currentPolicy;
     
     // Control de ejecución
     private PCB cpu;
@@ -33,19 +27,46 @@ public class OperatingSystem {
     private final SimpleList<PCB> blockedList;
     private final SimpleList<PCB> terminatedList;
 
-    private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> 
-            Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
+    private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
+        int c = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
+        if (c != 0) return c;
+        c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+        if (c != 0) return c;
+        c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (c != 0) return c;
+        return Integer.compare(p1.getPid(), p2.getPid());
+    };
 
-    private final Compare.Comparator<PCB> priorityComparator = (p1, p2) -> 
-            Integer.compare(p2.getPriority(), p1.getPriority());
+    private final Compare.Comparator<PCB> priorityComparator = (p1, p2) -> {
+        int c = Integer.compare(p2.getPriority(), p1.getPriority());
+        if (c != 0) return c;
+        c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+        if (c != 0) return c;
+        c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (c != 0) return c;
+        return Integer.compare(p1.getPid(), p2.getPid());
+    };
 
-    private final Compare.Comparator<PCB> edfComparator = (p1, p2) -> 
-            Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+    private final Compare.Comparator<PCB> edfComparator = (p1, p2) -> {
+        int c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+        if (c != 0) return c;
+        c = Integer.compare(p2.getPriority(), p1.getPriority());
+        if (c != 0) return c;
+        c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (c != 0) return c;
+        return Integer.compare(p1.getPid(), p2.getPid());
+    };
+
+    private final Compare.Comparator<PCB> fifoComparator = (p1, p2) -> {
+        int c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (c != 0) return c;
+        return Integer.compare(p1.getPid(), p2.getPid());
+    };
 
     public OperatingSystem(int initialQuantum) {
         this.globalTick = 0;
         this.quantum = initialQuantum;
-        this.currentAlgorithm = ALG_FCFS;
+        this.currentPolicy = SchedulingPolicy.FCFS;
         this.cpu = null;
         this.cpuQuantumTicks = 0;
 
@@ -64,6 +85,12 @@ public class OperatingSystem {
         // 1. Intentar cargar proceso si CPU está libre
         if (cpu == null) {
             scheduleNextProcess();
+        } else if (isPreemptivePolicy()) {
+            PCB bestReady = readyListSorted.peekFirst();
+            if (bestReady != null && shouldPreempt(bestReady, cpu)) {
+                preemptCurrentProcess();
+                scheduleNextProcess();
+            }
         }
 
         // 2. Ejecutar instrucción
@@ -77,7 +104,7 @@ public class OperatingSystem {
                 scheduleNextProcess(); // Intentar cargar otro inmediatamente
             } 
             // 4. Verificar Quantum (Solo RR)
-            else if (currentAlgorithm == ALG_RR && cpuQuantumTicks >= quantum) {
+            else if (currentPolicy == SchedulingPolicy.RR && cpuQuantumTicks >= quantum) {
                 preemptCurrentProcess();
                 scheduleNextProcess();
             }
@@ -134,11 +161,13 @@ public class OperatingSystem {
         }
     }
 
-    public void setAlgorithm(int newAlgorithm) {
-        if (this.currentAlgorithm == newAlgorithm) return;
+    public void setAlgorithm(SchedulingPolicy newPolicy) {
+        if (newPolicy == null) {
+            throw new IllegalArgumentException("policy must not be null");
+        }
+        if (this.currentPolicy == newPolicy) return;
 
-        int oldAlg = this.currentAlgorithm;
-        this.currentAlgorithm = newAlgorithm;
+        this.currentPolicy = newPolicy;
         
         SimpleList<PCB> tempBuffer = new SimpleList<>();
         
@@ -150,18 +179,49 @@ public class OperatingSystem {
             tempBuffer.add(readyListSorted.pollFirst());
         }
 
-        Compare.Comparator<PCB> targetComparator = switch (newAlgorithm) {
-            case ALG_PRIORITY -> priorityComparator;
-            case ALG_EDF -> edfComparator;
-            default -> srtComparator;
-        };
-        
-        this.readyListSorted = new OrderedList<>(targetComparator);
-        tempBuffer.forEach(p -> addProcess(p));
+        if (newPolicy == SchedulingPolicy.FCFS || newPolicy == SchedulingPolicy.RR) {
+            this.readyListSorted = new OrderedList<>(srtComparator);
+            OrderedList<PCB> fifoOrdered = new OrderedList<>(fifoComparator);
+            tempBuffer.forEach(fifoOrdered::add);
+            while (!fifoOrdered.isEmpty()) {
+                readyQueueFIFO.enqueue(fifoOrdered.pollFirst());
+            }
+        } else {
+            Compare.Comparator<PCB> targetComparator = switch (newPolicy) {
+                case PRIORITY -> priorityComparator;
+                case EDF -> edfComparator;
+                default -> srtComparator;
+            };
+            this.readyListSorted = new OrderedList<>(targetComparator);
+            tempBuffer.forEach(p -> addProcess(p));
+        }
     }
 
     private boolean isFifoAlgorithm() {
-        return currentAlgorithm == ALG_FCFS || currentAlgorithm == ALG_RR;
+        return currentPolicy == SchedulingPolicy.FCFS || currentPolicy == SchedulingPolicy.RR;
+    }
+
+    private boolean isPreemptivePolicy() {
+        return currentPolicy == SchedulingPolicy.SRT
+                || currentPolicy == SchedulingPolicy.PRIORITY
+                || currentPolicy == SchedulingPolicy.EDF;
+    }
+
+    private Compare.Comparator<PCB> getComparator() {
+        return switch (currentPolicy) {
+            case PRIORITY -> priorityComparator;
+            case EDF -> edfComparator;
+            default -> srtComparator;
+        };
+    }
+
+    private boolean shouldPreempt(PCB candidate, PCB running) {
+        return switch (currentPolicy) {
+            case SRT -> candidate.getRemainingInstructions() < running.getRemainingInstructions();
+            case PRIORITY -> candidate.getPriority() > running.getPriority();
+            case EDF -> candidate.getDeadlineTick() < running.getDeadlineTick();
+            default -> false;
+        };
     }
 
     // Getters / Setters

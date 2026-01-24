@@ -181,6 +181,7 @@ Cambiar política en ejecución:
 - **SRT:** preemptivo si existe otro con menor remainingInstructions.
 - **PRIORITY:** preemptivo por mayor prioridad.
 - **EDF:** preemptivo por deadline más próxima.
+  - **Nota:** la preempción depende solo del criterio principal; los tie-breakers aplican solo al orden de READY.
 
 ### 7.3 Empates (tie-breakers estables)
 
