@@ -18,7 +18,7 @@ public class OperatingSystem {
     public static final int ALG_PRIORITY = 3;
     public static final int ALG_EDF = 4;
 
-    private int globalTick;
+    private long globalTick;
     private int quantum;
     private int currentAlgorithm;
     
@@ -165,7 +165,7 @@ public class OperatingSystem {
     }
 
     // Getters / Setters
-    public int getGlobalTick() { return globalTick; }
+    public long getGlobalTick() { return globalTick; }
     public PCB getCpu() { return cpu; }
     public int getQuantum() { return quantum; }
     public void setQuantum(int quantum) { this.quantum = quantum; }

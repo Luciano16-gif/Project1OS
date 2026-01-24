@@ -35,9 +35,9 @@ git push -u origin feat/gui-queues
 - Evitar commits gigantes; preferir pequeños y frecuentes.
 
 ## Preguntas abiertas / Dudas
-- [ ] **Rango de memoria:** Que rango esperan para `maxProcesosEnMemoria`? (Pendiente preguntar. Por defecto usamos 5).
-- [ ] **Libreria JSON:** ¿Cuál prefieren? (Probablemente usaremos una simple como `org.json` o parseo manual si se ponen estrictos).
-- [x] **Deadline Miss:** ¿Matar o seguir? -> **Resuelto:** La Spec v0.2.1 define "Fail-soft". El proceso sigue, solo se marca el flag `deadlineMissed`.
+- [x] **Rango de memoria:** Decidido por el equipo. Sugerencia inicial: `maxProcessesInMemory` configurable con default bajo (6–8) para forzar swapping.
+- [x] **Carga JSON/CSV:** Ya no es requisito. El sistema debe iniciar con procesos generados automáticamente.
+- [ ] **Deadline Miss:** Pendiente confirmar con la preparadora. Mientras tanto seguimos fail-soft (no se mata; solo se marca `deadlineMissed`).
 
 ## Estado actual del repo (al 2026-01-19)
 **Estructuras de Datos:**
@@ -150,11 +150,7 @@ private final Compare.Comparator<PCB> fifoComparator =
     };
 ```
 
-### 5) Tipos de tiempo consistentes
-**Problema:** `globalTick` es `int`, pero arrival/deadline en PCB son `long`.  
-**Solucion:** cambiar `globalTick` a `long` y ajustar getters/operaciones.
-
-### 6) Checklist de validacion rapida (manual)
+### 5) Checklist de validacion rapida (manual)
 - SRT: un proceso corto nuevo debe preemptar al largo en el siguiente tick.
 - PRIORITY: uno de mayor prioridad debe preemptar a uno menor.
 - EDF: el de deadline mas cercano debe preemptar.
