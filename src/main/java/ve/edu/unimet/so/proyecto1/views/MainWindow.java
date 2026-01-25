@@ -8,47 +8,100 @@ import java.awt.geom.Point2D;
 
 public class MainWindow extends JFrame {
 
-    // --- COLORES DEL TEMA (Cyberpunk / Space Control) ---
-    private final Color COLOR_BG = new Color(20, 20, 40);       // Fondo Principal
-    private final Color COLOR_PANEL = new Color(30, 30, 60);    // Fondo Paneles
-    private final Color COLOR_TEXT = new Color(200, 220, 255);  // Texto General
-    private final Color COLOR_ACCENT = new Color(100, 149, 237);// Azul Acento
+    // --- COLORES ---
+    private final Color COLOR_BG = new Color(20, 20, 40);
+    private final Color COLOR_PANEL = new Color(30, 30, 60);
+    private final Color COLOR_TEXT = new Color(200, 220, 255);
+    private final Color COLOR_ACCENT = new Color(100, 149, 237);
+
+    // --- COMPONENTES DINÁMICOS (Para poder actualizarlos) ---
+    private JLabel clockLabel;
+    private JLabel cpuLabel;
+    private JProgressBar instructionBar;
+    private JProgressBar memoryBar;
     
+    // Modelos de tablas (Para agregar/quitar filas)
+    private DefaultTableModel readyModel;
+    private DefaultTableModel blockedModel;
+    private DefaultTableModel readySuspendedModel;
+    private DefaultTableModel blockedSuspendedModel;
+
     public MainWindow() {
-        // Configuración de la Ventana
         setTitle("UNIMET-Sat RTOS Simulator - Mission Control");
-        setSize(1280, 768); // Un poco más grande para que el botón luzca
+        setSize(1280, 768);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
-        
-        // Color de fondo global
         getContentPane().setBackground(COLOR_BG);
 
-        // 1. HEADER (Título y Reloj)
+        // 1. Header
         add(createHeader(), BorderLayout.NORTH);
 
-        // 2. ZONA CENTRAL (3 Columnas: Colas y CPU/Memoria)
+        // 2. Main Panel
         JPanel mainPanel = new JPanel(new GridLayout(1, 3, 10, 10));
         mainPanel.setBackground(COLOR_BG);
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Columna Izq: Ready Queue
-        mainPanel.add(createQueuePanel("Ready Queue (RAM)", new String[]{"ID", "Process", "Prio"}));
-
-        // Columna Centro: CPU, Memoria y Botón de Pánico
+        // Inicializamos los modelos de las tablas
+        readyModel = new DefaultTableModel(new String[]{"ID", "Process", "Prio"}, 0);
+        blockedModel = new DefaultTableModel(new String[]{"ID", "Process", "Wait"}, 0);
+        
+        mainPanel.add(createQueuePanel("Ready Queue (RAM)", readyModel));
         mainPanel.add(createCentralPanel());
-
-        // Columna Der: Blocked Queue
-        mainPanel.add(createQueuePanel("Blocked Queue (I/O)", new String[]{"ID", "Process", "Wait"}));
+        mainPanel.add(createQueuePanel("Blocked Queue (I/O)", blockedModel));
 
         add(mainPanel, BorderLayout.CENTER);
 
-        // 3. FOOTER (Colas de Suspendidos)
+        // 3. Footer
         add(createFooter(), BorderLayout.SOUTH);
     }
 
-    // --- MÉTODOS DE CREACIÓN DE PANELES ---
+    // --- MÉTODOS PÚBLICOS PARA ACTUALIZAR LA INTERFAZ (API) ---
+
+    public void updateClock(int cycle) {
+        clockLabel.setText(String.format("MISSION CLOCK: Cycle %04d  ", cycle));
+    }
+
+    public void updateCPU(String processName, int progress, int maxInstructions) {
+        if (processName == null || processName.isEmpty()) {
+            cpuLabel.setText("IDLE");
+            instructionBar.setValue(0);
+            instructionBar.setString("");
+        } else {
+            cpuLabel.setText(processName);
+            instructionBar.setMaximum(maxInstructions);
+            instructionBar.setValue(progress);
+            instructionBar.setString(progress + " / " + maxInstructions + " Instr");
+        }
+    }
+
+    public void updateMemory(int percentage) {
+        memoryBar.setValue(percentage);
+        memoryBar.setString("Memory Usage: " + percentage + "%");
+        
+        // Cambiar color si está crítica
+        if (percentage > 80) memoryBar.setForeground(Color.RED);
+        else if (percentage > 50) memoryBar.setForeground(Color.ORANGE);
+        else memoryBar.setForeground(new Color(0, 200, 0));
+    }
+
+    // ... otros métodos de update ...
+
+    public void addRowToReadySuspended(Object[] row) { 
+        readySuspendedModel.addRow(row); 
+    }
+    
+    public void addRowToBlockedSuspended(Object[] row) { 
+        blockedSuspendedModel.addRow(row); 
+    }
+
+    // Métodos para las tablas
+    public void addRowToReady(Object[] row) { readyModel.addRow(row); }
+    public void addRowToBlocked(Object[] row) { blockedModel.addRow(row); }
+    public void clearReady() { readyModel.setRowCount(0); }
+    public void clearBlocked() { blockedModel.setRowCount(0); }
+
+    // --- CREACIÓN DE PANELES (Modificados para usar variables de clase) ---
 
     private JPanel createHeader() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -59,17 +112,18 @@ public class MainWindow extends JFrame {
         title.setForeground(COLOR_TEXT);
         title.setFont(new Font("Consolas", Font.BOLD, 20));
 
-        JLabel clock = new JLabel("MISSION CLOCK: Cycle 0000  ");
-        clock.setForeground(Color.GREEN);
-        clock.setFont(new Font("Monospaced", Font.BOLD, 20));
+        // Variable de clase
+        clockLabel = new JLabel("MISSION CLOCK: Cycle 0000  ");
+        clockLabel.setForeground(Color.GREEN);
+        clockLabel.setFont(new Font("Monospaced", Font.BOLD, 20));
 
         panel.add(title, BorderLayout.WEST);
-        panel.add(clock, BorderLayout.EAST);
+        panel.add(clockLabel, BorderLayout.EAST);
         panel.setPreferredSize(new Dimension(0, 60));
         return panel;
     }
 
-    private JPanel createQueuePanel(String title, String[] columns) {
+    private JPanel createQueuePanel(String title, DefaultTableModel model) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(COLOR_PANEL);
         
@@ -78,8 +132,8 @@ public class MainWindow extends JFrame {
         border.setTitleFont(new Font("Arial", Font.BOLD, 14));
         panel.setBorder(border);
 
-        JTable table = new JTable(new DefaultTableModel(columns, 0));
-        table.setBackground(new Color(40, 40, 70)); // Fondo de tabla
+        JTable table = new JTable(model);
+        table.setBackground(new Color(40, 40, 70));
         table.setForeground(Color.WHITE);
         table.setFillsViewportHeight(true);
         table.getTableHeader().setBackground(new Color(20, 20, 40));
@@ -93,49 +147,47 @@ public class MainWindow extends JFrame {
     }
 
     private JPanel createCentralPanel() {
-        // Panel dividido verticalmente (2 filas)
         JPanel panel = new JPanel(new GridLayout(2, 1, 10, 10));
         panel.setBackground(COLOR_BG);
 
-        // --- PARTE SUPERIOR: CPU ---
+        // CPU
         JPanel cpuPanel = new JPanel(new BorderLayout());
         cpuPanel.setBackground(COLOR_PANEL);
         TitledBorder cpuBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.CYAN), "RUNNING PROCESS (CPU)");
         cpuBorder.setTitleColor(Color.CYAN);
         cpuPanel.setBorder(cpuBorder);
 
-        JLabel cpuLabel = new JLabel("IDLE", SwingConstants.CENTER);
+        // Variable de clase
+        cpuLabel = new JLabel("IDLE", SwingConstants.CENTER);
         cpuLabel.setFont(new Font("Consolas", Font.BOLD, 28));
         cpuLabel.setForeground(Color.WHITE);
-        cpuPanel.add(cpuLabel, BorderLayout.CENTER);
         
-        JProgressBar instructionBar = new JProgressBar();
+        // Variable de clase
+        instructionBar = new JProgressBar();
         instructionBar.setValue(0);
         instructionBar.setStringPainted(true);
+
+        cpuPanel.add(cpuLabel, BorderLayout.CENTER);
         cpuPanel.add(instructionBar, BorderLayout.SOUTH);
 
-        // --- PARTE INFERIOR: Memoria y Botón ---
+        // Memoria
         JPanel memPanel = new JPanel(new BorderLayout());
         memPanel.setBackground(COLOR_PANEL);
         TitledBorder memBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.ORANGE), "MAIN MEMORY");
         memBorder.setTitleColor(Color.ORANGE);
         memPanel.setBorder(memBorder);
 
-        // Barra de memoria (Arriba)
-        JProgressBar memoryBar = new JProgressBar();
-        memoryBar.setValue(45);
-        memoryBar.setString("Memory Usage: 45%");
+        // Variable de clase
+        memoryBar = new JProgressBar();
+        memoryBar.setValue(0);
+        memoryBar.setString("Memory Usage: 0%");
         memoryBar.setStringPainted(true);
-        memoryBar.setForeground(new Color(255, 100, 0));
+        memoryBar.setForeground(new Color(0, 200, 0));
         
-        // El Botón Personalizado (Centro)
         EmergencyButton emergencyBtn = new EmergencyButton();
-        // Altura suficiente para el gráfico complejo
-        emergencyBtn.setPreferredSize(new Dimension(0, 140)); 
-
+        emergencyBtn.setPreferredSize(new Dimension(0, 140));
         JPanel buttonContainer = new JPanel(new BorderLayout());
         buttonContainer.setBackground(COLOR_PANEL);
-        // Márgenes laterales grandes para centrarlo visualmente
         buttonContainer.setBorder(BorderFactory.createEmptyBorder(15, 40, 15, 40));
         buttonContainer.add(emergencyBtn, BorderLayout.CENTER);
 
@@ -144,7 +196,6 @@ public class MainWindow extends JFrame {
 
         panel.add(cpuPanel);
         panel.add(memPanel);
-
         return panel;
     }
 
@@ -153,12 +204,15 @@ public class MainWindow extends JFrame {
         panel.setBackground(COLOR_BG);
         panel.setPreferredSize(new Dimension(0, 150));
 
-        panel.add(createQueuePanel("Ready-Suspended (Disk)", new String[]{"ID", "Process", "Prio"}));
-        panel.add(createQueuePanel("Blocked-Suspended (Disk)", new String[]{"ID", "Process", "Wait"}));
+        readySuspendedModel = new DefaultTableModel(new String[]{"ID", "Process", "Prio"}, 0);
+        blockedSuspendedModel = new DefaultTableModel(new String[]{"ID", "Process", "Wait"}, 0);
 
+        panel.add(createQueuePanel("Ready-Suspended (Disk)", readySuspendedModel));
+        panel.add(createQueuePanel("Blocked-Suspended (Disk)", blockedSuspendedModel));
         return panel;
     }
 
+    // El Main original se queda solo para pruebas simples de visualización
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new MainWindow().setVisible(true));
     }
