@@ -15,13 +15,14 @@ public class OperatingSystem {
     private long globalTick;
     private int quantum;
     private SchedulingPolicy currentPolicy;
+    private final MemoryManager memoryManager;
     
     // Control de ejecución
     private PCB cpu;
     private int cpuQuantumTicks; // Contador de uso de quantum actual
     
     // Estructuras
-    private final LinkedQueue<PCB> newQueue; //Por ahora no la usamos mucho, directo a Ready
+    private final LinkedQueue<PCB> newQueue; 
     private final LinkedQueue<PCB> readyQueueFIFO;
     private OrderedList<PCB> readyListSorted; 
     private final SimpleList<PCB> blockedList;
@@ -75,14 +76,15 @@ public class OperatingSystem {
         this.readyListSorted = new OrderedList<>(srtComparator);
         this.blockedList = new SimpleList<>();
         this.terminatedList = new SimpleList<>();
+        this.memoryManager = new MemoryManager(this);
     }
 
     // --- Lógica Principal del Ciclo ---
     
     public void executeOneCycle() {
         globalTick++;
-        
-        // 1. Intentar cargar proceso si CPU está libre
+
+        memoryManager.admitFromNew();
         if (cpu == null) {
             scheduleNextProcess();
         } else if (isPreemptivePolicy()) {
@@ -92,18 +94,15 @@ public class OperatingSystem {
                 scheduleNextProcess();
             }
         }
-
-        // 2. Ejecutar instrucción
         if (cpu != null) {
             cpu.executeCycle();
             cpuQuantumTicks++;
 
-            // 3. Verificar terminación
             if (cpu.hasFinished()) {
                 terminateProcess(cpu);
-                scheduleNextProcess(); // Intentar cargar otro inmediatamente
+                scheduleNextProcess(); 
             } 
-            // 4. Verificar Quantum (Solo RR)
+            // Verificar Quantum (Solo RR)
             else if (currentPolicy == SchedulingPolicy.RR && cpuQuantumTicks >= quantum) {
                 preemptCurrentProcess();
                 scheduleNextProcess();
@@ -159,6 +158,7 @@ public class OperatingSystem {
             cpu = null;
             cpuQuantumTicks = 0;
         }
+        memoryManager.swapInIfSpace();
     }
 
     public void setAlgorithm(SchedulingPolicy newPolicy) {
@@ -223,6 +223,15 @@ public class OperatingSystem {
             default -> false;
         };
     }
+
+    // Package-private helpers for MemoryManager
+    LinkedQueue<PCB> getNewQueue() { return newQueue; }
+    SimpleList<PCB> getBlockedList() { return blockedList; }
+    LinkedQueue<PCB> getReadyQueueFIFO() { return readyQueueFIFO; }
+    OrderedList<PCB> getReadyListSorted() { return readyListSorted; }
+    PCB getCpuInternal() { return cpu; }
+    boolean isFifoAlgorithmInternal() { return isFifoAlgorithm(); }
+    void enqueueReady(PCB p) { addProcess(p); }
 
     // Getters / Setters
     public long getGlobalTick() { return globalTick; }
