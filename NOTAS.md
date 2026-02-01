@@ -66,12 +66,9 @@ git push origin --delete nombre-rama
 **Pendiente (Siguientes pasos):**
 - [ ] Crear `ClockThread` (el motor que llama a `executeOneCycle`).
 - [ ] Interfaz Gráfica (GUI) para ver esto funcionando.
-
-## Próximas ramas / features
-- `feat/process-admission`: admisión NEW → READY/SUSPENDED, límite de memoria y swap-in/out.
-- `feat/io-blocking`: manejo I/O (bloqueo, IODeviceThread, retorno a READY).
-- `feat/interrupts`: interrupciones externas + ISR ticks.
-- `feat/gui-queues`: tablas, snapshots y log en Swing.
+- [ ] Iniciar `IODeviceThread` desde el arranque (GUI/Clock) y sincronizar su tick con el reloj del sistema.
+- [ ] Iniciar `InterruptGeneratorThread` desde el arranque y sincronizar su ritmo con el reloj del sistema.
+- [ ] Indicador GUI de modo CPU (USER/KERNEL) durante ISR.
 
 ## Plan de correcciones (scheduler y base)
 Objetivo: arreglar el codigo actual para que sea correcto, mantenible y listo para seguir creciendo sin rework.

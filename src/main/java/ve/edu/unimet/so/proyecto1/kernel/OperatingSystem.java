@@ -12,10 +12,16 @@ import ve.edu.unimet.so.proyecto1.models.ProcessState;
 
 public class OperatingSystem {
 
-    private long globalTick;
+    private volatile long globalTick;
     private int quantum;
     private SchedulingPolicy currentPolicy;
     private final MemoryManager memoryManager;
+    private final EventQueue eventQueue;
+    private int isrTicksRemaining;
+    private long lastInterruptDetectedTick;
+    private int lastIsrCostTicks;
+    private String lastInterruptType;
+    private final SimpleList<KernelEvent> pendingInterrupts;
     
     // Control de ejecución
     private PCB cpu;
@@ -27,6 +33,8 @@ public class OperatingSystem {
     private OrderedList<PCB> readyListSorted; 
     private final SimpleList<PCB> blockedList;
     private final SimpleList<PCB> terminatedList;
+    private final SimpleList<String> eventLog;
+    private int maxLogEntries = 200;
 
     private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
         int c = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
@@ -70,13 +78,20 @@ public class OperatingSystem {
         this.currentPolicy = SchedulingPolicy.FCFS;
         this.cpu = null;
         this.cpuQuantumTicks = 0;
+        this.isrTicksRemaining = 0;
+        this.lastInterruptDetectedTick = -1;
+        this.lastIsrCostTicks = 0;
+        this.lastInterruptType = null;
 
         this.newQueue = new LinkedQueue<>();
         this.readyQueueFIFO = new LinkedQueue<>();
         this.readyListSorted = new OrderedList<>(srtComparator);
         this.blockedList = new SimpleList<>();
         this.terminatedList = new SimpleList<>();
+        this.eventLog = new SimpleList<>();
         this.memoryManager = new MemoryManager(this);
+        this.eventQueue = new EventQueue();
+        this.pendingInterrupts = new SimpleList<>();
     }
 
     // --- Lógica Principal del Ciclo ---
@@ -84,6 +99,21 @@ public class OperatingSystem {
     public void executeOneCycle() {
         globalTick++;
 
+        processEvents();
+        if (isrTicksRemaining > 0) {
+            isrTicksRemaining--;
+            if (isrTicksRemaining == 0) {
+                long latency = (lastInterruptDetectedTick >= 0)
+                        ? (globalTick - lastInterruptDetectedTick)
+                        : 0;
+                logEvent("ISR terminada; latencia " + latency + " ticks; servicio " + lastIsrCostTicks + " ticks");
+                if (!pendingInterrupts.isEmpty()) {
+                    KernelEvent next = pendingInterrupts.removeAt(0);
+                    publishEvent(next);
+                }
+            }
+            return;
+        }
         memoryManager.admitFromNew();
         if (cpu == null) {
             scheduleNextProcess();
@@ -102,6 +132,11 @@ public class OperatingSystem {
                 terminateProcess(cpu);
                 scheduleNextProcess(); 
             } 
+            else if (cpu.shouldTriggerIO()) {
+                publishEvent(new KernelEvent(KernelEvent.Type.IO_REQUEST, cpu));
+                processEvents();
+                scheduleNextProcess();
+            }
             // Verificar Quantum (Solo RR)
             else if (currentPolicy == SchedulingPolicy.RR && cpuQuantumTicks >= quantum) {
                 preemptCurrentProcess();
@@ -207,14 +242,6 @@ public class OperatingSystem {
                 || currentPolicy == SchedulingPolicy.EDF;
     }
 
-    private Compare.Comparator<PCB> getComparator() {
-        return switch (currentPolicy) {
-            case PRIORITY -> priorityComparator;
-            case EDF -> edfComparator;
-            default -> srtComparator;
-        };
-    }
-
     private boolean shouldPreempt(PCB candidate, PCB running) {
         return switch (currentPolicy) {
             case SRT -> candidate.getRemainingInstructions() < running.getRemainingInstructions();
@@ -232,6 +259,77 @@ public class OperatingSystem {
     PCB getCpuInternal() { return cpu; }
     boolean isFifoAlgorithmInternal() { return isFifoAlgorithm(); }
     void enqueueReady(PCB p) { addProcess(p); }
+
+    void publishEvent(KernelEvent event) { eventQueue.enqueue(event); }
+
+    void logEvent(String message) {
+        if (message == null) return;
+        if (eventLog.size() >= maxLogEntries) {
+            eventLog.removeAt(0);
+        }
+        eventLog.add(message);
+    }
+
+    String[] snapshotEventLog() {
+        Object[] arr = eventLog.toArray();
+        String[] out = new String[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            out[i] = (String) arr[i];
+        }
+        return out;
+    }
+
+    PCB[] snapshotBlocked() {
+        Object[] arr = blockedList.toArray();
+        PCB[] out = new PCB[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            out[i] = (PCB) arr[i];
+        }
+        return out;
+    }
+
+    PCB[] snapshotBlockedSuspended() {
+        return memoryManager.snapshotBlockedSuspended();
+    }
+
+    private void processEvents() {
+        KernelEvent event;
+        while ((event = eventQueue.poll()) != null) {
+            switch (event.getType()) {
+                case IO_REQUEST -> handleIoRequest(event.getPcb());
+                case IO_COMPLETE -> memoryManager.onIoComplete(event.getPcb());
+                case INTERRUPT -> handleInterrupt(event);
+            }
+        }
+    }
+
+    private void handleInterrupt(KernelEvent event) {
+        if (event == null) return;
+        if (isrTicksRemaining > 0) {
+            pendingInterrupts.add(event);
+            return;
+        }
+        lastInterruptType = event.getInterruptType();
+        lastInterruptDetectedTick = event.getDetectedTick();
+        lastIsrCostTicks = event.getIsrCostTicks();
+        isrTicksRemaining = lastIsrCostTicks;
+        logEvent("Interrupción detectada: " + lastInterruptType);
+    }
+
+    private void handleIoRequest(PCB process) {
+        if (process == null) return;
+        if (process.getState() != ProcessState.RUNNING) return;
+
+        process.setState(ProcessState.BLOCKED);
+        process.setIoRemainingTicks(process.getIoServiceTicks());
+        blockedList.add(process);
+        logEvent("Proceso " + process.getPid() + " bloqueado por I/O (" + process.getIoServiceTicks() + " ticks)");
+
+        if (cpu == process) {
+            cpu = null;
+            cpuQuantumTicks = 0;
+        }
+    }
 
     // Getters / Setters
     public long getGlobalTick() { return globalTick; }

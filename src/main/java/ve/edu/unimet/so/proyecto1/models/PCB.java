@@ -21,16 +21,17 @@ public class PCB {
     private final long deadlineTick; // Deadline absoluto
 
     // --- Entrada/Salida (I/O) ---
-    private final int ioEventCycle;      // Instrucción donde ocurre el bloqueo (-1 si no tiene)
-    private final int ioServiceDuration; // Duración del bloqueo
-    private int ioWaitedTicks;
+    private final int ioEveryTicks;      // 0 = nunca, N = cada N instrucciones ejecutadas
+    private int ioTriggerCountdown;      // cuenta hacia 0 mientras corre
+    private final int ioServiceTicks;    // duración del bloqueo
+    private int ioRemainingTicks;        // ticks restantes mientras está bloqueado
 
     // --- Métricas ---
     private long startTick = -1;
     private long finishTick = -1;
     private long waitingTime = 0;
 
-    public PCB(int pid, String name, int totalInstructions, int priority, long arrivalTick, long deadlineTick, int ioEventCycle, int ioServiceDuration) {
+    public PCB(int pid, String name, int totalInstructions, int priority, long arrivalTick, long deadlineTick, int ioEveryTicks, int ioServiceTicks) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name must not be null/blank");
         }
@@ -40,11 +41,11 @@ public class PCB {
         if (deadlineTick < arrivalTick) {
             throw new IllegalArgumentException("deadlineTick must be >= arrivalTick");
         }
-        if (ioEventCycle < -1 || ioEventCycle > totalInstructions || ioEventCycle == 0) {
-            throw new IllegalArgumentException("ioEventCycle must be -1 or in [1, totalInstructions]");
+        if (ioEveryTicks < 0) {
+            throw new IllegalArgumentException("ioEveryTicks must be >= 0");
         }
-        if (ioServiceDuration < 0) {
-            throw new IllegalArgumentException("ioServiceDuration must be >= 0");
+        if (ioServiceTicks < 0) {
+            throw new IllegalArgumentException("ioServiceTicks must be >= 0");
         }
 
         this.pid = pid;
@@ -53,13 +54,14 @@ public class PCB {
         this.priority = priority;
         this.arrivalTick = arrivalTick;
         this.deadlineTick = deadlineTick;
-        this.ioEventCycle = ioEventCycle;
-        this.ioServiceDuration = ioServiceDuration;
+        this.ioEveryTicks = ioEveryTicks;
+        this.ioServiceTicks = ioServiceTicks;
 
         this.state = ProcessState.NEW;
         this.programCounter = 0;
         this.mar = 0;
-        this.ioWaitedTicks = 0;
+        this.ioTriggerCountdown = ioEveryTicks;
+        this.ioRemainingTicks = 0;
     }
 
     // --- Getters y Setters Básicos ---
@@ -86,9 +88,10 @@ public class PCB {
     public long getArrivalTick() { return arrivalTick; }
     public long getDeadlineTick() { return deadlineTick; }
 
-    public int getIoEventCycle() { return ioEventCycle; }
-    public int getIoServiceDuration() { return ioServiceDuration; }
-    public int getIoWaitedTicks() { return ioWaitedTicks; }
+    public int getIoEveryTicks() { return ioEveryTicks; }
+    public int getIoTriggerCountdown() { return ioTriggerCountdown; }
+    public int getIoServiceTicks() { return ioServiceTicks; }
+    public int getIoRemainingTicks() { return ioRemainingTicks; }
 
     public long getStartTick() { return startTick; }
     public long getFinishTick() { return finishTick; }
@@ -103,12 +106,17 @@ public class PCB {
         }
     }
 
-    public void incrementIoWait() {
-        this.ioWaitedTicks++;
+    public void setIoRemainingTicks(int value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("ioRemainingTicks must be >= 0");
+        }
+        this.ioRemainingTicks = value;
     }
-    
-    public void resetIoWait() {
-        this.ioWaitedTicks = 0;
+
+    public void decrementIoRemainingTicks() {
+        if (ioRemainingTicks > 0) {
+            ioRemainingTicks--;
+        }
     }
 
     public void incrementWaitingTime() {
@@ -131,7 +139,15 @@ public class PCB {
 
     public boolean shouldTriggerIO() {
         // Expected to be checked AFTER executeCycle() for the current tick.
-        return ioEventCycle != -1 && programCounter == ioEventCycle;
+        if (ioEveryTicks <= 0) return false;
+        if (ioTriggerCountdown > 0) {
+            ioTriggerCountdown--;
+        }
+        if (ioTriggerCountdown == 0) {
+            ioTriggerCountdown = ioEveryTicks;
+            return true;
+        }
+        return false;
     }
     
     public long getDeadlineRemaining(long currentTick) {

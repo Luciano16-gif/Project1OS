@@ -78,6 +78,21 @@ public class MemoryManager {
       }
     }
 
+    public void onIoComplete(PCB process) {
+      if (process == null) return;
+      if (process.getState() == ProcessState.BLOCKED) {
+        removeFromBlocked(process);
+        process.setState(ProcessState.READY);
+        os.enqueueReady(process);
+        os.logEvent("I/O completada para " + process.getPid());
+      } else if (process.getState() == ProcessState.BLOCKED_SUSPENDED) {
+        blockedSuspended.removeFirst(process);
+        process.setState(ProcessState.READY_SUSPENDED);
+        readySuspended.add(process);
+        os.logEvent("I/O completada para " + process.getPid() + " (suspendido)");
+      }
+    }
+
     private int getResidentCount() {
       int ready = os.isFifoAlgorithmInternal() ? 
         os.getReadyQueueFIFO().size() : 
@@ -163,6 +178,15 @@ public class MemoryManager {
 
     private void removeFromBlocked(PCB target) {
       os.getBlockedList().removeFirst(target);
+    }
+
+    PCB[] snapshotBlockedSuspended() {
+      Object[] arr = blockedSuspended.toArray();
+      PCB[] out = new PCB[arr.length];
+      for (int i = 0; i < arr.length; i++) {
+        out[i] = (PCB) arr[i];
+      }
+      return out;
     }
 
 
