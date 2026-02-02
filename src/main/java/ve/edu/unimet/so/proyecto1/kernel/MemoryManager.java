@@ -189,6 +189,15 @@ public class MemoryManager {
       return out;
     }
 
+    PCB[] snapshotReadySuspended() {
+      Object[] arr = readySuspended.toArray();
+      PCB[] out = new PCB[arr.length];
+      for (int i = 0; i < arr.length; i++) {
+        out[i] = (PCB) arr[i];
+      }
+      return out;
+    }
+
 
 
 }

@@ -270,7 +270,8 @@ public class OperatingSystem {
         eventLog.add(message);
     }
 
-    String[] snapshotEventLog() {
+    public String[] snapshotEventLog() {
+        // TODO: expose to GUI log panel when UI wiring is ready.
         Object[] arr = eventLog.toArray();
         String[] out = new String[arr.length];
         for (int i = 0; i < arr.length; i++) {
@@ -279,7 +280,28 @@ public class OperatingSystem {
         return out;
     }
 
-    PCB[] snapshotBlocked() {
+    public PCB[] snapshotNew() {
+        return snapshotQueue(newQueue);
+    }
+
+    public PCB[] snapshotReady() {
+        if (isFifoAlgorithm()) {
+            return snapshotQueue(readyQueueFIFO);
+        }
+        Object[] arr = readyListSorted.toArray();
+        PCB[] out = new PCB[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            out[i] = (PCB) arr[i];
+        }
+        return out;
+    }
+
+    public PCB[] snapshotRunning() {
+        if (cpu == null) return new PCB[0];
+        return new PCB[] { cpu };
+    }
+
+    public PCB[] snapshotBlocked() {
         Object[] arr = blockedList.toArray();
         PCB[] out = new PCB[arr.length];
         for (int i = 0; i < arr.length; i++) {
@@ -288,8 +310,51 @@ public class OperatingSystem {
         return out;
     }
 
-    PCB[] snapshotBlockedSuspended() {
+    public PCB[] snapshotBlockedSuspended() {
         return memoryManager.snapshotBlockedSuspended();
+    }
+
+    public PCB[] snapshotReadySuspended() {
+        return memoryManager.snapshotReadySuspended();
+    }
+
+    public PCB[] snapshotTerminated() {
+        Object[] arr = terminatedList.toArray();
+        PCB[] out = new PCB[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            out[i] = (PCB) arr[i];
+        }
+        return out;
+    }
+
+    public Object[] pcbToRow(PCB p) {
+        if (p == null) return new Object[0];
+        long remainingDeadline = p.getDeadlineRemaining(globalTick);
+        return new Object[] {
+            p.getPid(),
+            p.getName(),
+            p.getState().name(),
+            p.getProgramCounter(),
+            p.getMar(),
+            p.getPriority(),
+            p.getRemainingInstructions(),
+            remainingDeadline
+        };
+    }
+
+    public boolean isInKernelMode() {
+        return isrTicksRemaining > 0;
+    }
+
+    private PCB[] snapshotQueue(LinkedQueue<PCB> queue) {
+        int size = queue.size();
+        PCB[] out = new PCB[size];
+        for (int i = 0; i < size; i++) {
+            PCB p = queue.dequeue();
+            out[i] = p;
+            queue.enqueue(p);
+        }
+        return out;
     }
 
     private void processEvents() {

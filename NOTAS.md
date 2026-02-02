@@ -49,35 +49,41 @@ git push origin --delete nombre-rama
 - [x] **Carga JSON/CSV:** Ya no es requisito. El sistema debe iniciar con procesos generados automáticamente.
 - [ ] **Deadline Miss:** Pendiente confirmar con la preparadora. Mientras tanto seguimos fail-soft (no se mata; solo se marca `deadlineMissed`).
 
-## Estado actual del repo (al 2026-01-19)
+## Estado actual del repo (al 2026-02-02)
 **Estructuras de Datos:**
 - [x] Propias: `LinkedQueue`, `SimpleList`, `OrderedList`.
 - [x] Tests básicos (`DataStructuresTest`) pasando.
 
 **Modelos y Kernel:**
-- [x] `PCB` base (identidad, PC/MAR, prioridad, arrival/deadline, I/O simple).
+- [x] `PCB` actualizado (I/O por countdown: `ioEveryTicks`, `ioTriggerCountdown`, `ioServiceTicks`, `ioRemainingTicks`).
 - [x] `ProcessState` (7 estados incluyendo suspendidos).
 - [ ] `PeriodicTaskTemplate` (no existe en el código actual).
-- [x] `OperatingSystem` base:
-    - Cola FIFO para FCFS/RR y lista ordenada para SRT/EDF/Prioridad.
-    - Cambio dinámico de algoritmo (reordena la cola READY).
-    - Aún no maneja admisión NEW, swapping, I/O real ni preemptividad en SRT/EDF/Prioridad.
+- [x] `OperatingSystem` con:
+    - Preemptividad correcta (SRT/PRIORITY/EDF) + RR por quantum.
+    - Reordenamiento READY con tie-breakers.
+    - Event queue + logging básico.
+- [x] `MemoryManager`:
+    - Admisión NEW → READY/SUSPENDED.
+    - Swap-out/in con criterios de criticidad.
+- [x] I/O core:
+    - IO_REQUEST / IO_COMPLETE.
+    - IODevice tick (clock-driven).
+- [x] Interrupciones core:
+    - Eventos INT y ticks de ISR (clock-driven).
+- [x] `ClockThread` creado (driver principal).
 
 **Pendiente (Siguientes pasos):**
-- [ ] Crear `ClockThread` (el motor que llama a `executeOneCycle`).
-- [ ] Interfaz Gráfica (GUI) para ver esto funcionando.
-- [ ] Iniciar `IODeviceThread` desde el arranque (GUI/Clock) y sincronizar su tick con el reloj del sistema.
-- [ ] Iniciar `InterruptGeneratorThread` desde el arranque y sincronizar su ritmo con el reloj del sistema.
+- [ ] Completar GUI (reemplazar placeholders y cumplir spec).
+- [ ] Conectar `ClockThread` a controles GUI (Start/Pause/Step) y ciclo configurable.
+- [ ] Conectar snapshots a tablas GUI (NEW/READY/RUNNING/BLOCKED/TERMINATED + suspendidos).
+- [ ] Panel de log (usar `snapshotEventLog()`).
 - [ ] Indicador GUI de modo CPU (USER/KERNEL) durante ISR.
+- [ ] Validaciones de inputs GUI (cycleDurationMs, quantum, maxProcessesInMemory).
 
-## Plan de correcciones (scheduler y base)
-Objetivo: arreglar el codigo actual para que sea correcto, mantenible y listo para seguir creciendo sin rework.
-
-### Flujo de ramas recomendado
-- Crear una rama dedicada para estos arreglos (ej: `fix/scheduler-preemption` o `refactor/scheduler-core`).
-- Trabajar ahi y hacer PR hacia `feat/process-model`.
-- Cuando este validado, PR de `feat/process-model` -> `develop`.
-- Esto deja trazabilidad clara y evita mezclar arreglos con otras features.
+## Handoff GUI, especificaciones y correcciones
+- Evitar `DefaultTableModel`; usar `AbstractTableModel` con snapshots (`PCB[]`).
+- El kernel ya expone snapshots para colas y logs (`snapshotEventLog()`).
+- `ClockThread` debe ser el motor único (no usar `Thread.sleep` en GUI).
 
 ## Nota de mantenimiento
 Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.

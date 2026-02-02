@@ -5,7 +5,7 @@ package ve.edu.unimet.so.proyecto1.kernel;
 
 import java.util.Random;
 
-public class InterruptGeneratorThread extends Thread {
+public class InterruptGeneratorThread {
 
     private final OperatingSystem os;
     private final Random rng = new Random();
@@ -14,47 +14,36 @@ public class InterruptGeneratorThread extends Thread {
         "RADIACION_SOLAR",
         "COMANDO_TIERRA"
     };
-    private final int minSleepMs;
-    private final int maxSleepMs;
-    private volatile boolean running = true;
+    private final int minTicks;
+    private final int maxTicks;
+    private int ticksUntilNext;
 
-    public InterruptGeneratorThread(OperatingSystem os, int minSleepMs, int maxSleepMs) {
+    public InterruptGeneratorThread(OperatingSystem os, int minTicks, int maxTicks) {
         if (os == null) {
             throw new IllegalArgumentException("os must not be null");
         }
-        if (minSleepMs < 1 || maxSleepMs < minSleepMs) {
-            throw new IllegalArgumentException("invalid sleep range");
+        if (minTicks < 1 || maxTicks < minTicks) {
+            throw new IllegalArgumentException("invalid tick range");
         }
         this.os = os;
-        this.minSleepMs = minSleepMs;
-        this.maxSleepMs = maxSleepMs;
-        setName("InterruptGeneratorThread");
-        setDaemon(true);
+        this.minTicks = minTicks;
+        this.maxTicks = maxTicks;
+        this.ticksUntilNext = nextInterval();
     }
 
-    public void shutdown() {
-        running = false;
-        interrupt();
-    }
-
-    @Override
-    public void run() {
-        while (running) {
-            try {
-                Thread.sleep(nextSleep());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            if (!running) break;
-            int cost = 1 + rng.nextInt(5);
-            String type = types[rng.nextInt(types.length)];
-            long detectedTick = os.getGlobalTick();
-            os.publishEvent(new KernelEvent(type, detectedTick, cost));
+    public void tickMaybeGenerate(long currentTick) {
+        if (ticksUntilNext > 0) {
+            ticksUntilNext--;
         }
+        if (ticksUntilNext > 0) return;
+        int cost = 1 + rng.nextInt(5);
+        String type = types[rng.nextInt(types.length)];
+        os.publishEvent(new KernelEvent(type, currentTick, cost));
+        ticksUntilNext = nextInterval();
     }
 
-    private int nextSleep() {
-        if (minSleepMs == maxSleepMs) return minSleepMs;
-        return minSleepMs + rng.nextInt(maxSleepMs - minSleepMs + 1);
+    private int nextInterval() {
+        if (minTicks == maxTicks) return minTicks;
+        return minTicks + rng.nextInt(maxTicks - minTicks + 1);
     }
 }
