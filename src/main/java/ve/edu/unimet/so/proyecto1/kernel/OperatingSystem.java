@@ -22,15 +22,15 @@ public class OperatingSystem {
     private int lastIsrCostTicks;
     private String lastInterruptType;
     private final SimpleList<KernelEvent> pendingInterrupts;
-    
+
     // Control de ejecución
     private PCB cpu;
     private int cpuQuantumTicks; // Contador de uso de quantum actual
-    
+
     // Estructuras
-    private final LinkedQueue<PCB> newQueue; 
+    private final LinkedQueue<PCB> newQueue;
     private final LinkedQueue<PCB> readyQueueFIFO;
-    private OrderedList<PCB> readyListSorted; 
+    private OrderedList<PCB> readyListSorted;
     private final SimpleList<PCB> blockedList;
     private final SimpleList<PCB> terminatedList;
     private final SimpleList<String> eventLog;
@@ -38,37 +38,47 @@ public class OperatingSystem {
 
     private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
         int c = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
     private final Compare.Comparator<PCB> priorityComparator = (p1, p2) -> {
         int c = Integer.compare(p2.getPriority(), p1.getPriority());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
     private final Compare.Comparator<PCB> edfComparator = (p1, p2) -> {
         int c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         c = Integer.compare(p2.getPriority(), p1.getPriority());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
     private final Compare.Comparator<PCB> fifoComparator = (p1, p2) -> {
         int c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0) return c;
+        if (c != 0)
+            return c;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
@@ -95,7 +105,7 @@ public class OperatingSystem {
     }
 
     // --- Lógica Principal del Ciclo ---
-    
+
     public void executeOneCycle() {
         globalTick++;
 
@@ -130,9 +140,8 @@ public class OperatingSystem {
 
             if (cpu.hasFinished()) {
                 terminateProcess(cpu);
-                scheduleNextProcess(); 
-            } 
-            else if (cpu.shouldTriggerIO()) {
+                scheduleNextProcess();
+            } else if (cpu.shouldTriggerIO()) {
                 publishEvent(new KernelEvent(KernelEvent.Type.IO_REQUEST, cpu));
                 processEvents();
                 scheduleNextProcess();
@@ -156,8 +165,9 @@ public class OperatingSystem {
     }
 
     private void preemptCurrentProcess() {
-        if (cpu == null) return;
-        
+        if (cpu == null)
+            return;
+
         // Cambio de contexto: Running -> Ready
         cpu.setState(ProcessState.READY);
         addProcess(cpu); // Devuelve a la cola correspondiente
@@ -167,9 +177,18 @@ public class OperatingSystem {
 
     // --- Gestión de Procesos ---
 
+    /**
+     * Agrega un proceso a la cola NEW (para uso externo/GUI)
+     */
+    public void submitNewProcess(PCB process) {
+        if (process == null)
+            return;
+        newQueue.enqueue(process);
+    }
+
     public void addProcess(PCB process) {
         process.setState(ProcessState.READY);
-        
+
         if (isFifoAlgorithm()) {
             readyQueueFIFO.enqueue(process);
         } else {
@@ -200,16 +219,17 @@ public class OperatingSystem {
         if (newPolicy == null) {
             throw new IllegalArgumentException("policy must not be null");
         }
-        if (this.currentPolicy == newPolicy) return;
+        if (this.currentPolicy == newPolicy)
+            return;
 
         this.currentPolicy = newPolicy;
-        
+
         SimpleList<PCB> tempBuffer = new SimpleList<>();
-        
+
         while (!readyQueueFIFO.isEmpty()) {
             tempBuffer.add(readyQueueFIFO.dequeue());
         }
-        
+
         while (!readyListSorted.isEmpty()) {
             tempBuffer.add(readyListSorted.pollFirst());
         }
@@ -252,18 +272,41 @@ public class OperatingSystem {
     }
 
     // Package-private helpers for MemoryManager
-    LinkedQueue<PCB> getNewQueue() { return newQueue; }
-    SimpleList<PCB> getBlockedList() { return blockedList; }
-    LinkedQueue<PCB> getReadyQueueFIFO() { return readyQueueFIFO; }
-    OrderedList<PCB> getReadyListSorted() { return readyListSorted; }
-    PCB getCpuInternal() { return cpu; }
-    boolean isFifoAlgorithmInternal() { return isFifoAlgorithm(); }
-    void enqueueReady(PCB p) { addProcess(p); }
+    LinkedQueue<PCB> getNewQueue() {
+        return newQueue;
+    }
 
-    void publishEvent(KernelEvent event) { eventQueue.enqueue(event); }
+    SimpleList<PCB> getBlockedList() {
+        return blockedList;
+    }
+
+    LinkedQueue<PCB> getReadyQueueFIFO() {
+        return readyQueueFIFO;
+    }
+
+    OrderedList<PCB> getReadyListSorted() {
+        return readyListSorted;
+    }
+
+    PCB getCpuInternal() {
+        return cpu;
+    }
+
+    boolean isFifoAlgorithmInternal() {
+        return isFifoAlgorithm();
+    }
+
+    void enqueueReady(PCB p) {
+        addProcess(p);
+    }
+
+    void publishEvent(KernelEvent event) {
+        eventQueue.enqueue(event);
+    }
 
     void logEvent(String message) {
-        if (message == null) return;
+        if (message == null)
+            return;
         if (eventLog.size() >= maxLogEntries) {
             eventLog.removeAt(0);
         }
@@ -297,7 +340,8 @@ public class OperatingSystem {
     }
 
     public PCB[] snapshotRunning() {
-        if (cpu == null) return new PCB[0];
+        if (cpu == null)
+            return new PCB[0];
         return new PCB[] { cpu };
     }
 
@@ -328,17 +372,18 @@ public class OperatingSystem {
     }
 
     public Object[] pcbToRow(PCB p) {
-        if (p == null) return new Object[0];
+        if (p == null)
+            return new Object[0];
         long remainingDeadline = p.getDeadlineRemaining(globalTick);
         return new Object[] {
-            p.getPid(),
-            p.getName(),
-            p.getState().name(),
-            p.getProgramCounter(),
-            p.getMar(),
-            p.getPriority(),
-            p.getRemainingInstructions(),
-            remainingDeadline
+                p.getPid(),
+                p.getName(),
+                p.getState().name(),
+                p.getProgramCounter(),
+                p.getMar(),
+                p.getPriority(),
+                p.getRemainingInstructions(),
+                remainingDeadline
         };
     }
 
@@ -369,7 +414,8 @@ public class OperatingSystem {
     }
 
     private void handleInterrupt(KernelEvent event) {
-        if (event == null) return;
+        if (event == null)
+            return;
         if (isrTicksRemaining > 0) {
             pendingInterrupts.add(event);
             return;
@@ -382,8 +428,10 @@ public class OperatingSystem {
     }
 
     private void handleIoRequest(PCB process) {
-        if (process == null) return;
-        if (process.getState() != ProcessState.RUNNING) return;
+        if (process == null)
+            return;
+        if (process.getState() != ProcessState.RUNNING)
+            return;
 
         process.setState(ProcessState.BLOCKED);
         process.setIoRemainingTicks(process.getIoServiceTicks());
@@ -397,8 +445,19 @@ public class OperatingSystem {
     }
 
     // Getters / Setters
-    public long getGlobalTick() { return globalTick; }
-    public PCB getCpu() { return cpu; }
-    public int getQuantum() { return quantum; }
-    public void setQuantum(int quantum) { this.quantum = quantum; }
+    public long getGlobalTick() {
+        return globalTick;
+    }
+
+    public PCB getCpu() {
+        return cpu;
+    }
+
+    public int getQuantum() {
+        return quantum;
+    }
+
+    public void setQuantum(int quantum) {
+        this.quantum = quantum;
+    }
 }

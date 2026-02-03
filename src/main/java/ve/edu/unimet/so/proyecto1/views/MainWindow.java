@@ -19,7 +19,7 @@ public class MainWindow extends JFrame {
     private JLabel cpuLabel;
     private JProgressBar instructionBar;
     private JProgressBar memoryBar;
-    
+
     // Modelos de tablas (Para agregar/quitar filas)
     private DefaultTableModel readyModel;
     private DefaultTableModel blockedModel;
@@ -43,9 +43,9 @@ public class MainWindow extends JFrame {
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // Inicializamos los modelos de las tablas
-        readyModel = new DefaultTableModel(new String[]{"ID", "Process", "Prio"}, 0);
-        blockedModel = new DefaultTableModel(new String[]{"ID", "Process", "Wait"}, 0);
-        
+        readyModel = new DefaultTableModel(new String[] { "ID", "Process", "Prio" }, 0);
+        blockedModel = new DefaultTableModel(new String[] { "ID", "Process", "Wait" }, 0);
+
         mainPanel.add(createQueuePanel("Ready Queue (RAM)", readyModel));
         mainPanel.add(createCentralPanel());
         mainPanel.add(createQueuePanel("Blocked Queue (I/O)", blockedModel));
@@ -78,28 +78,50 @@ public class MainWindow extends JFrame {
     public void updateMemory(int percentage) {
         memoryBar.setValue(percentage);
         memoryBar.setString("Memory Usage: " + percentage + "%");
-        
+
         // Cambiar color si está crítica
-        if (percentage > 80) memoryBar.setForeground(Color.RED);
-        else if (percentage > 50) memoryBar.setForeground(Color.ORANGE);
-        else memoryBar.setForeground(new Color(0, 200, 0));
+        if (percentage > 80)
+            memoryBar.setForeground(Color.RED);
+        else if (percentage > 50)
+            memoryBar.setForeground(Color.ORANGE);
+        else
+            memoryBar.setForeground(new Color(0, 200, 0));
     }
 
     // ... otros métodos de update ...
 
-    public void addRowToReadySuspended(Object[] row) { 
-        readySuspendedModel.addRow(row); 
+    public void addRowToReadySuspended(Object[] row) {
+        readySuspendedModel.addRow(row);
     }
-    
-    public void addRowToBlockedSuspended(Object[] row) { 
-        blockedSuspendedModel.addRow(row); 
+
+    public void addRowToBlockedSuspended(Object[] row) {
+        blockedSuspendedModel.addRow(row);
     }
 
     // Métodos para las tablas
-    public void addRowToReady(Object[] row) { readyModel.addRow(row); }
-    public void addRowToBlocked(Object[] row) { blockedModel.addRow(row); }
-    public void clearReady() { readyModel.setRowCount(0); }
-    public void clearBlocked() { blockedModel.setRowCount(0); }
+    public void addRowToReady(Object[] row) {
+        readyModel.addRow(row);
+    }
+
+    public void addRowToBlocked(Object[] row) {
+        blockedModel.addRow(row);
+    }
+
+    public void clearReady() {
+        readyModel.setRowCount(0);
+    }
+
+    public void clearBlocked() {
+        blockedModel.setRowCount(0);
+    }
+
+    public void clearReadySuspended() {
+        readySuspendedModel.setRowCount(0);
+    }
+
+    public void clearBlockedSuspended() {
+        blockedSuspendedModel.setRowCount(0);
+    }
 
     // --- CREACIÓN DE PANELES (Modificados para usar variables de clase) ---
 
@@ -126,7 +148,7 @@ public class MainWindow extends JFrame {
     private JPanel createQueuePanel(String title, DefaultTableModel model) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(COLOR_PANEL);
-        
+
         TitledBorder border = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(COLOR_ACCENT), title);
         border.setTitleColor(COLOR_TEXT);
         border.setTitleFont(new Font("Arial", Font.BOLD, 14));
@@ -138,10 +160,10 @@ public class MainWindow extends JFrame {
         table.setFillsViewportHeight(true);
         table.getTableHeader().setBackground(new Color(20, 20, 40));
         table.getTableHeader().setForeground(COLOR_TEXT);
-        
+
         JScrollPane scroll = new JScrollPane(table);
         scroll.getViewport().setBackground(new Color(40, 40, 70));
-        
+
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
     }
@@ -153,7 +175,8 @@ public class MainWindow extends JFrame {
         // CPU
         JPanel cpuPanel = new JPanel(new BorderLayout());
         cpuPanel.setBackground(COLOR_PANEL);
-        TitledBorder cpuBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.CYAN), "RUNNING PROCESS (CPU)");
+        TitledBorder cpuBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.CYAN),
+                "RUNNING PROCESS (CPU)");
         cpuBorder.setTitleColor(Color.CYAN);
         cpuPanel.setBorder(cpuBorder);
 
@@ -161,7 +184,7 @@ public class MainWindow extends JFrame {
         cpuLabel = new JLabel("IDLE", SwingConstants.CENTER);
         cpuLabel.setFont(new Font("Consolas", Font.BOLD, 28));
         cpuLabel.setForeground(Color.WHITE);
-        
+
         // Variable de clase
         instructionBar = new JProgressBar();
         instructionBar.setValue(0);
@@ -173,7 +196,8 @@ public class MainWindow extends JFrame {
         // Memoria
         JPanel memPanel = new JPanel(new BorderLayout());
         memPanel.setBackground(COLOR_PANEL);
-        TitledBorder memBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.ORANGE), "MAIN MEMORY");
+        TitledBorder memBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.ORANGE),
+                "MAIN MEMORY");
         memBorder.setTitleColor(Color.ORANGE);
         memPanel.setBorder(memBorder);
 
@@ -183,7 +207,7 @@ public class MainWindow extends JFrame {
         memoryBar.setString("Memory Usage: 0%");
         memoryBar.setStringPainted(true);
         memoryBar.setForeground(new Color(0, 200, 0));
-        
+
         EmergencyButton emergencyBtn = new EmergencyButton();
         emergencyBtn.setPreferredSize(new Dimension(0, 140));
         JPanel buttonContainer = new JPanel(new BorderLayout());
@@ -204,8 +228,8 @@ public class MainWindow extends JFrame {
         panel.setBackground(COLOR_BG);
         panel.setPreferredSize(new Dimension(0, 150));
 
-        readySuspendedModel = new DefaultTableModel(new String[]{"ID", "Process", "Prio"}, 0);
-        blockedSuspendedModel = new DefaultTableModel(new String[]{"ID", "Process", "Wait"}, 0);
+        readySuspendedModel = new DefaultTableModel(new String[] { "ID", "Process", "Prio" }, 0);
+        blockedSuspendedModel = new DefaultTableModel(new String[] { "ID", "Process", "Wait" }, 0);
 
         panel.add(createQueuePanel("Ready-Suspended (Disk)", readySuspendedModel));
         panel.add(createQueuePanel("Blocked-Suspended (Disk)", blockedSuspendedModel));
@@ -239,11 +263,11 @@ class EmergencyButton extends JButton {
         int h = getHeight();
 
         // --- 1. ELEMENTOS ESTÁTICOS (No se mueven al clicar) ---
-        
+
         // A. CARCASA METÁLICA
         g2.setColor(new Color(60, 60, 60));
         g2.fillRoundRect(0, 0, w, h, 20, 20);
-        
+
         GradientPaint metalPaint = new GradientPaint(0, 0, new Color(200, 200, 200), 0, h, new Color(100, 100, 100));
         g2.setPaint(metalPaint);
         g2.fillRoundRect(3, 3, w - 6, h - 6, 18, 18);
@@ -255,18 +279,19 @@ class EmergencyButton extends JButton {
         g2.drawRoundRect(10, 10, w - 20, h - 20, 10, 10);
 
         // --- CÁLCULOS DE POSICIÓN ---
-        
+
         // Definimos el tamaño y posición "base" (sin presionar)
         int buttonDiameter = Math.min(w, h) - 65;
-        if (buttonDiameter < 10) buttonDiameter = 10;
-        
+        if (buttonDiameter < 10)
+            buttonDiameter = 10;
+
         int buttonX = (w - buttonDiameter) / 2;
         int staticButtonY = 15; // Posición Y original fija
 
         // --- 2. EL TEXTO (Ahora es estático) ---
         // Usamos staticButtonY para que el texto NO se mueva cuando el botón baje
-        int textY = staticButtonY + buttonDiameter + 22; 
-        
+        int textY = staticButtonY + buttonDiameter + 22;
+
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("SansSerif", Font.BOLD, 11));
         FontMetrics fm = g2.getFontMetrics();
@@ -285,29 +310,30 @@ class EmergencyButton extends JButton {
         int currentButtonY = staticButtonY + offsetY;
 
         // C. ANILLO METÁLICO (Base)
-        // El anillo se queda quieto o se mueve muy poco, aquí lo dejamos quieto para dar efecto de que el botón entra en él
+        // El anillo se queda quieto o se mueve muy poco, aquí lo dejamos quieto para
+        // dar efecto de que el botón entra en él
         g2.setPaint(new GradientPaint(0, staticButtonY, Color.GRAY, 0, staticButtonY + buttonDiameter, Color.WHITE));
         g2.fillOval(buttonX - 3, staticButtonY - 3, buttonDiameter + 6, buttonDiameter + 6);
 
         // D. EL BOTÓN (ESFERA) CON CAMBIO DE COLOR
         Point2D center = new Point2D.Float(buttonX + buttonDiameter / 2.0f, currentButtonY + buttonDiameter / 2.0f);
         float radius = buttonDiameter / 2.0f;
-        float[] dist = {0.0f, 0.85f, 1.0f};
-        
+        float[] dist = { 0.0f, 0.85f, 1.0f };
+
         Color[] colors;
         if (isPressed) {
             // COLORES AL PRESIONAR (Más oscuros/densos para simular presión y sombra)
             colors = new Color[] {
-                new Color(200, 50, 50), // Centro menos brillante
-                new Color(150, 0, 0),   // Cuerpo más oscuro
-                new Color(50, 0, 0)     // Borde muy oscuro
+                    new Color(200, 50, 50), // Centro menos brillante
+                    new Color(150, 0, 0), // Cuerpo más oscuro
+                    new Color(50, 0, 0) // Borde muy oscuro
             };
         } else {
             // COLORES NORMALES (Brillantes)
             colors = new Color[] {
-                new Color(255, 80, 80), // Centro brillante
-                new Color(200, 0, 0),   // Rojo estándar
-                new Color(100, 0, 0)    // Borde oscuro
+                    new Color(255, 80, 80), // Centro brillante
+                    new Color(200, 0, 0), // Rojo estándar
+                    new Color(100, 0, 0) // Borde oscuro
             };
         }
 
@@ -319,10 +345,9 @@ class EmergencyButton extends JButton {
         // El brillo se mueve con el botón
         g2.setPaint(new LinearGradientPaint(
                 0, currentButtonY, 0, currentButtonY + buttonDiameter / 2,
-                new float[]{0f, 1f},
-                new Color[]{new Color(255, 255, 255, 140), new Color(255, 255, 255, 0)}
-        ));
-        g2.fillOval(buttonX + (buttonDiameter/4), currentButtonY + 5, buttonDiameter/2, buttonDiameter/3);
+                new float[] { 0f, 1f },
+                new Color[] { new Color(255, 255, 255, 140), new Color(255, 255, 255, 0) }));
+        g2.fillOval(buttonX + (buttonDiameter / 4), currentButtonY + 5, buttonDiameter / 2, buttonDiameter / 3);
 
         g2.dispose();
     }

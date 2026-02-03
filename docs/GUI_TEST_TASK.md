@@ -19,10 +19,10 @@ Crear un nuevo archivo de pruebas (`GUIRealisticTest.java`) que demuestre el fun
 - [ ] Agregar indicador de modo CPU (USER/KERNEL)
 
 ### Fase 3: Crear GUIRealisticTest.java
-- [ ] Setup inicial con `OperatingSystem` y `ClockThread`
-- [ ] Generador de procesos aleatorios con PCB nuevo
-- [ ] Loop de actualización usando snapshots reales
-- [ ] Conexión de controles (Start/Pause/Step)
+- [x] Setup inicial con `OperatingSystem` y `ClockThread`
+- [x] Generador de procesos aleatorios con PCB nuevo
+- [x] Loop de actualización usando snapshots reales
+- [ ] Conexión de controles (Start/Pause/Step) - botones en GUI
 
 ### Fase 4: Escenarios de Prueba
 - [ ] Escenario 1: Procesos básicos sin I/O
