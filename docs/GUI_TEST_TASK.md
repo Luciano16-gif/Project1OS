@@ -13,10 +13,10 @@ Crear un nuevo archivo de pruebas (`GUIRealisticTest.java`) que demuestre el fun
 - [x] Crear plan de implementación
 
 ### Fase 2: Actualizar MainWindow para usar snapshots
-- [ ] Cambiar `DefaultTableModel` por `AbstractTableModel` personalizado
-- [ ] Agregar tablas para todos los estados (NEW, RUNNING, TERMINATED)
-- [ ] Agregar panel de log de eventos
-- [ ] Agregar indicador de modo CPU (USER/KERNEL)
+- [x] Cambiar `DefaultTableModel` por `AbstractTableModel` personalizado (`PCBTableModel.java`)
+- [x] Agregar tablas para todos los estados (NEW, RUNNING, TERMINATED)
+- [x] Agregar panel de log de eventos
+- [x] Agregar indicador de modo CPU (USER/KERNEL)
 
 ### Fase 3: Crear GUIRealisticTest.java
 - [x] Setup inicial con `OperatingSystem` y `ClockThread`

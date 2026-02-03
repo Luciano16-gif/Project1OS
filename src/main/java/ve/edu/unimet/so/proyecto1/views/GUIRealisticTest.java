@@ -1,6 +1,7 @@
 /*
  * GUIRealisticTest.java
  * Prueba realista de la GUI conectada al kernel del simulador RTOS
+ * Actualizado para usar los nuevos métodos de snapshot de MainWindow
  */
 package ve.edu.unimet.so.proyecto1.views;
 
@@ -20,7 +21,6 @@ public class GUIRealisticTest {
     // Configuración
     private static final int QUANTUM = 4;
     private static final int CYCLE_DURATION_MS = 200; // ms por ciclo (ajustable)
-    private static final int INITIAL_PROCESSES = 5;
 
     public GUIRealisticTest() {
         // 1. Inicializar el kernel
@@ -35,7 +35,10 @@ public class GUIRealisticTest {
         // 4. Generar procesos iniciales
         generateInitialProcesses();
 
-        // 5. Iniciar el loop de actualización de GUI
+        // 5. Configurar botón de emergencia
+        setupEmergencyButton();
+
+        // 6. Iniciar el loop de actualización de GUI
         startGUIRefreshLoop();
     }
 
@@ -51,6 +54,16 @@ public class GUIRealisticTest {
         System.out.println("Generados " + batch.length + " procesos iniciales");
     }
 
+    private void setupEmergencyButton() {
+        window.getEmergencyButton().addActionListener(e -> {
+            // Crear proceso de emergencia al presionar el botón
+            long currentTick = os.getGlobalTick();
+            PCB emergency = ProcessGenerator.createEmergencyProcess(currentTick);
+            os.submitNewProcess(emergency);
+            System.out.println("🚨 EMERGENCIA: Proceso " + emergency.getName() + " creado en tick " + currentTick);
+        });
+    }
+
     private void startGUIRefreshLoop() {
         // Timer de Swing para actualizar la GUI cada 100ms
         Timer refreshTimer = new Timer(100, e -> refreshGUI());
@@ -59,8 +72,13 @@ public class GUIRealisticTest {
 
     private void refreshGUI() {
         SwingUtilities.invokeLater(() -> {
+            long globalTick = os.getGlobalTick();
+
             // Actualizar reloj
-            window.updateClock((int) os.getGlobalTick());
+            window.updateClock((int) globalTick);
+
+            // Actualizar modo CPU (USER/KERNEL)
+            window.updateCpuMode(os.isInKernelMode());
 
             // Actualizar CPU (proceso en ejecución)
             PCB[] running = os.snapshotRunning();
@@ -74,70 +92,20 @@ public class GUIRealisticTest {
                 window.updateCPU(null, 0, 0);
             }
 
-            // Actualizar tablas de colas
-            refreshReadyTable();
-            refreshBlockedTable();
-            refreshSuspendedTables();
+            // Actualizar todas las tablas usando snapshots directos
+            window.updateNewTable(os.snapshotNew(), globalTick);
+            window.updateReadyTable(os.snapshotReady(), globalTick);
+            window.updateBlockedTable(os.snapshotBlocked(), globalTick);
+            window.updateTerminatedTable(os.snapshotTerminated(), globalTick);
+            window.updateReadySuspendedTable(os.snapshotReadySuspended(), globalTick);
+            window.updateBlockedSuspendedTable(os.snapshotBlockedSuspended(), globalTick);
+
+            // Actualizar log de eventos
+            window.updateLog(os.snapshotEventLog());
 
             // Actualizar memoria (porcentaje de uso)
             updateMemoryBar();
         });
-    }
-
-    private void refreshReadyTable() {
-        window.clearReady();
-        PCB[] ready = os.snapshotReady();
-        for (PCB p : ready) {
-            if (p != null) {
-                window.addRowToReady(new Object[] {
-                        String.valueOf(p.getPid()),
-                        p.getName(),
-                        String.valueOf(p.getPriority())
-                });
-            }
-        }
-    }
-
-    private void refreshBlockedTable() {
-        window.clearBlocked();
-        PCB[] blocked = os.snapshotBlocked();
-        for (PCB p : blocked) {
-            if (p != null) {
-                window.addRowToBlocked(new Object[] {
-                        String.valueOf(p.getPid()),
-                        p.getName(),
-                        p.getIoRemainingTicks() + " ticks"
-                });
-            }
-        }
-    }
-
-    private void refreshSuspendedTables() {
-        // Ready-Suspended
-        window.clearReadySuspended();
-        PCB[] readySusp = os.snapshotReadySuspended();
-        for (PCB p : readySusp) {
-            if (p != null) {
-                window.addRowToReadySuspended(new Object[] {
-                        String.valueOf(p.getPid()),
-                        p.getName(),
-                        String.valueOf(p.getPriority())
-                });
-            }
-        }
-
-        // Blocked-Suspended
-        window.clearBlockedSuspended();
-        PCB[] blockedSusp = os.snapshotBlockedSuspended();
-        for (PCB p : blockedSusp) {
-            if (p != null) {
-                window.addRowToBlockedSuspended(new Object[] {
-                        String.valueOf(p.getPid()),
-                        p.getName(),
-                        p.getIoRemainingTicks() + " ticks"
-                });
-            }
-        }
     }
 
     private void updateMemoryBar() {

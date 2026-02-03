@@ -2,10 +2,16 @@ package ve.edu.unimet.so.proyecto1.views;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableModel;
 import java.awt.*;
 import java.awt.geom.Point2D;
+import ve.edu.unimet.so.proyecto1.models.PCB;
 
+/**
+ * MainWindow - Ventana principal del simulador RTOS
+ * Refactorizada para usar PCBTableModel (AbstractTableModel) en lugar de
+ * DefaultTableModel
+ */
 public class MainWindow extends JFrame {
 
     // --- COLORES ---
@@ -14,49 +20,83 @@ public class MainWindow extends JFrame {
     private final Color COLOR_TEXT = new Color(200, 220, 255);
     private final Color COLOR_ACCENT = new Color(100, 149, 237);
 
-    // --- COMPONENTES DINÁMICOS (Para poder actualizarlos) ---
+    // --- COMPONENTES DINÁMICOS ---
     private JLabel clockLabel;
     private JLabel cpuLabel;
+    private JLabel cpuModeLabel; // Indicador USER/KERNEL
     private JProgressBar instructionBar;
     private JProgressBar memoryBar;
+    private JTextArea logArea; // Panel de log de eventos
+    private EmergencyButton emergencyBtn;
 
-    // Modelos de tablas (Para agregar/quitar filas)
-    private DefaultTableModel readyModel;
-    private DefaultTableModel blockedModel;
-    private DefaultTableModel readySuspendedModel;
-    private DefaultTableModel blockedSuspendedModel;
+    // --- MODELOS DE TABLAS (AbstractTableModel) ---
+    private PCBTableModel newModel;
+    private PCBTableModel readyModel;
+    private PCBTableModel runningModel;
+    private PCBTableModel blockedModel;
+    private PCBTableModel terminatedModel;
+    private PCBTableModel readySuspendedModel;
+    private PCBTableModel blockedSuspendedModel;
 
     public MainWindow() {
         setTitle("UNIMET-Sat RTOS Simulator - Mission Control");
-        setSize(1280, 768);
+        setSize(1400, 900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout(10, 10));
+        setLayout(new BorderLayout(5, 5));
         getContentPane().setBackground(COLOR_BG);
+
+        // Inicializar modelos
+        initModels();
 
         // 1. Header
         add(createHeader(), BorderLayout.NORTH);
 
-        // 2. Main Panel
-        JPanel mainPanel = new JPanel(new GridLayout(1, 3, 10, 10));
+        // 2. Main Panel (3 columnas: colas izq, centro, colas der)
+        JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBackground(COLOR_BG);
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        // Inicializamos los modelos de las tablas
-        readyModel = new DefaultTableModel(new String[] { "ID", "Process", "Prio" }, 0);
-        blockedModel = new DefaultTableModel(new String[] { "ID", "Process", "Wait" }, 0);
+        // Panel izquierdo: NEW + READY
+        JPanel leftPanel = new JPanel(new GridLayout(2, 1, 5, 5));
+        leftPanel.setBackground(COLOR_BG);
+        leftPanel.add(createQueuePanel("NEW (Waiting Admission)", newModel));
+        leftPanel.add(createQueuePanel("READY Queue", readyModel));
 
-        mainPanel.add(createQueuePanel("Ready Queue (RAM)", readyModel));
-        mainPanel.add(createCentralPanel());
-        mainPanel.add(createQueuePanel("Blocked Queue (I/O)", blockedModel));
+        // Panel central: CPU + Memory + Log
+        JPanel centerPanel = createCentralPanel();
+
+        // Panel derecho: BLOCKED + TERMINATED
+        JPanel rightPanel = new JPanel(new GridLayout(2, 1, 5, 5));
+        rightPanel.setBackground(COLOR_BG);
+        rightPanel.add(createQueuePanel("BLOCKED (I/O Wait)", blockedModel));
+        rightPanel.add(createQueuePanel("TERMINATED", terminatedModel));
+
+        mainPanel.add(leftPanel, BorderLayout.WEST);
+        mainPanel.add(centerPanel, BorderLayout.CENTER);
+        mainPanel.add(rightPanel, BorderLayout.EAST);
+
+        // Ajustar tamaños
+        leftPanel.setPreferredSize(new Dimension(280, 0));
+        rightPanel.setPreferredSize(new Dimension(280, 0));
 
         add(mainPanel, BorderLayout.CENTER);
 
-        // 3. Footer
+        // 3. Footer: Suspended queues
         add(createFooter(), BorderLayout.SOUTH);
     }
 
-    // --- MÉTODOS PÚBLICOS PARA ACTUALIZAR LA INTERFAZ (API) ---
+    private void initModels() {
+        newModel = new PCBTableModel();
+        readyModel = new PCBTableModel();
+        runningModel = new PCBTableModel();
+        blockedModel = new PCBTableModel();
+        terminatedModel = new PCBTableModel();
+        readySuspendedModel = new PCBTableModel();
+        blockedSuspendedModel = new PCBTableModel();
+    }
+
+    // =================== MÉTODOS PÚBLICOS DE ACTUALIZACIÓN ===================
 
     public void updateClock(int cycle) {
         clockLabel.setText(String.format("MISSION CLOCK: Cycle %04d  ", cycle));
@@ -75,11 +115,20 @@ public class MainWindow extends JFrame {
         }
     }
 
+    public void updateCpuMode(boolean isKernelMode) {
+        if (isKernelMode) {
+            cpuModeLabel.setText("MODE: KERNEL");
+            cpuModeLabel.setForeground(Color.RED);
+        } else {
+            cpuModeLabel.setText("MODE: USER");
+            cpuModeLabel.setForeground(Color.GREEN);
+        }
+    }
+
     public void updateMemory(int percentage) {
         memoryBar.setValue(percentage);
         memoryBar.setString("Memory Usage: " + percentage + "%");
 
-        // Cambiar color si está crítica
         if (percentage > 80)
             memoryBar.setForeground(Color.RED);
         else if (percentage > 50)
@@ -88,7 +137,66 @@ public class MainWindow extends JFrame {
             memoryBar.setForeground(new Color(0, 200, 0));
     }
 
-    // ... otros métodos de update ...
+    // --- Métodos de actualización usando snapshots (recomendado) ---
+
+    public void updateNewTable(PCB[] snapshot, long globalTick) {
+        newModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateReadyTable(PCB[] snapshot, long globalTick) {
+        readyModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateRunningTable(PCB[] snapshot, long globalTick) {
+        runningModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateBlockedTable(PCB[] snapshot, long globalTick) {
+        blockedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateTerminatedTable(PCB[] snapshot, long globalTick) {
+        terminatedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateReadySuspendedTable(PCB[] snapshot, long globalTick) {
+        readySuspendedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateBlockedSuspendedTable(PCB[] snapshot, long globalTick) {
+        blockedSuspendedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    // --- Métodos de log ---
+
+    public void updateLog(String[] logEntries) {
+        if (logEntries == null || logEntries.length == 0) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        // Mostrar últimas 50 entradas (más recientes primero)
+        int start = Math.max(0, logEntries.length - 50);
+        for (int i = logEntries.length - 1; i >= start; i--) {
+            sb.append(logEntries[i]).append("\n");
+        }
+        logArea.setText(sb.toString());
+        logArea.setCaretPosition(0); // Scroll al inicio
+    }
+
+    public void appendLog(String message) {
+        logArea.append(message + "\n");
+        logArea.setCaretPosition(logArea.getDocument().getLength());
+    }
+
+    // --- Métodos legacy (retrocompatibilidad con GUIRealisticTest actual) ---
+
+    public void addRowToReady(Object[] row) {
+        readyModel.addRow(row);
+    }
+
+    public void addRowToBlocked(Object[] row) {
+        blockedModel.addRow(row);
+    }
 
     public void addRowToReadySuspended(Object[] row) {
         readySuspendedModel.addRow(row);
@@ -98,32 +206,28 @@ public class MainWindow extends JFrame {
         blockedSuspendedModel.addRow(row);
     }
 
-    // Métodos para las tablas
-    public void addRowToReady(Object[] row) {
-        readyModel.addRow(row);
-    }
-
-    public void addRowToBlocked(Object[] row) {
-        blockedModel.addRow(row);
-    }
-
     public void clearReady() {
-        readyModel.setRowCount(0);
+        readyModel.clear();
     }
 
     public void clearBlocked() {
-        blockedModel.setRowCount(0);
+        blockedModel.clear();
     }
 
     public void clearReadySuspended() {
-        readySuspendedModel.setRowCount(0);
+        readySuspendedModel.clear();
     }
 
     public void clearBlockedSuspended() {
-        blockedSuspendedModel.setRowCount(0);
+        blockedSuspendedModel.clear();
     }
 
-    // --- CREACIÓN DE PANELES (Modificados para usar variables de clase) ---
+    // --- Getter para el botón de emergencia ---
+    public EmergencyButton getEmergencyButton() {
+        return emergencyBtn;
+    }
+
+    // =================== CREACIÓN DE PANELES ===================
 
     private JPanel createHeader() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -134,32 +238,45 @@ public class MainWindow extends JFrame {
         title.setForeground(COLOR_TEXT);
         title.setFont(new Font("Consolas", Font.BOLD, 20));
 
-        // Variable de clase
+        // Panel derecho con clock y modo CPU
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 5));
+        rightPanel.setBackground(COLOR_PANEL);
+
+        cpuModeLabel = new JLabel("MODE: USER");
+        cpuModeLabel.setForeground(Color.GREEN);
+        cpuModeLabel.setFont(new Font("Monospaced", Font.BOLD, 16));
+
         clockLabel = new JLabel("MISSION CLOCK: Cycle 0000  ");
         clockLabel.setForeground(Color.GREEN);
         clockLabel.setFont(new Font("Monospaced", Font.BOLD, 20));
 
+        rightPanel.add(cpuModeLabel);
+        rightPanel.add(clockLabel);
+
         panel.add(title, BorderLayout.WEST);
-        panel.add(clockLabel, BorderLayout.EAST);
-        panel.setPreferredSize(new Dimension(0, 60));
+        panel.add(rightPanel, BorderLayout.EAST);
+        panel.setPreferredSize(new Dimension(0, 50));
         return panel;
     }
 
-    private JPanel createQueuePanel(String title, DefaultTableModel model) {
+    private JPanel createQueuePanel(String title, TableModel model) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(COLOR_PANEL);
 
-        TitledBorder border = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(COLOR_ACCENT), title);
+        TitledBorder border = BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(COLOR_ACCENT), title);
         border.setTitleColor(COLOR_TEXT);
-        border.setTitleFont(new Font("Arial", Font.BOLD, 14));
+        border.setTitleFont(new Font("Arial", Font.BOLD, 12));
         panel.setBorder(border);
 
         JTable table = new JTable(model);
         table.setBackground(new Color(40, 40, 70));
         table.setForeground(Color.WHITE);
         table.setFillsViewportHeight(true);
+        table.setRowHeight(20);
         table.getTableHeader().setBackground(new Color(20, 20, 40));
         table.getTableHeader().setForeground(COLOR_TEXT);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.getViewport().setBackground(new Color(40, 40, 70));
@@ -169,23 +286,25 @@ public class MainWindow extends JFrame {
     }
 
     private JPanel createCentralPanel() {
-        JPanel panel = new JPanel(new GridLayout(2, 1, 10, 10));
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBackground(COLOR_BG);
 
-        // CPU
+        // Panel superior: CPU + Running
+        JPanel topPanel = new JPanel(new BorderLayout(5, 5));
+        topPanel.setBackground(COLOR_BG);
+
+        // CPU Panel
         JPanel cpuPanel = new JPanel(new BorderLayout());
         cpuPanel.setBackground(COLOR_PANEL);
-        TitledBorder cpuBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.CYAN),
-                "RUNNING PROCESS (CPU)");
+        TitledBorder cpuBorder = BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Color.CYAN), "RUNNING PROCESS (CPU)");
         cpuBorder.setTitleColor(Color.CYAN);
         cpuPanel.setBorder(cpuBorder);
 
-        // Variable de clase
         cpuLabel = new JLabel("IDLE", SwingConstants.CENTER);
-        cpuLabel.setFont(new Font("Consolas", Font.BOLD, 28));
+        cpuLabel.setFont(new Font("Consolas", Font.BOLD, 24));
         cpuLabel.setForeground(Color.WHITE);
 
-        // Variable de clase
         instructionBar = new JProgressBar();
         instructionBar.setValue(0);
         instructionBar.setStringPainted(true);
@@ -193,56 +312,77 @@ public class MainWindow extends JFrame {
         cpuPanel.add(cpuLabel, BorderLayout.CENTER);
         cpuPanel.add(instructionBar, BorderLayout.SOUTH);
 
-        // Memoria
-        JPanel memPanel = new JPanel(new BorderLayout());
+        // Memory + Emergency Button Panel
+        JPanel memPanel = new JPanel(new BorderLayout(5, 5));
         memPanel.setBackground(COLOR_PANEL);
-        TitledBorder memBorder = BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.ORANGE),
-                "MAIN MEMORY");
+        TitledBorder memBorder = BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Color.ORANGE), "MAIN MEMORY");
         memBorder.setTitleColor(Color.ORANGE);
         memPanel.setBorder(memBorder);
 
-        // Variable de clase
         memoryBar = new JProgressBar();
         memoryBar.setValue(0);
         memoryBar.setString("Memory Usage: 0%");
         memoryBar.setStringPainted(true);
         memoryBar.setForeground(new Color(0, 200, 0));
 
-        EmergencyButton emergencyBtn = new EmergencyButton();
-        emergencyBtn.setPreferredSize(new Dimension(0, 140));
-        JPanel buttonContainer = new JPanel(new BorderLayout());
-        buttonContainer.setBackground(COLOR_PANEL);
-        buttonContainer.setBorder(BorderFactory.createEmptyBorder(15, 40, 15, 40));
-        buttonContainer.add(emergencyBtn, BorderLayout.CENTER);
+        emergencyBtn = new EmergencyButton();
+        emergencyBtn.setPreferredSize(new Dimension(0, 100));
+        JPanel btnContainer = new JPanel(new BorderLayout());
+        btnContainer.setBackground(COLOR_PANEL);
+        btnContainer.setBorder(BorderFactory.createEmptyBorder(10, 30, 10, 30));
+        btnContainer.add(emergencyBtn, BorderLayout.CENTER);
 
         memPanel.add(memoryBar, BorderLayout.NORTH);
-        memPanel.add(buttonContainer, BorderLayout.CENTER);
+        memPanel.add(btnContainer, BorderLayout.CENTER);
 
-        panel.add(cpuPanel);
-        panel.add(memPanel);
+        topPanel.add(cpuPanel, BorderLayout.NORTH);
+        topPanel.add(memPanel, BorderLayout.CENTER);
+
+        // Panel inferior: Log de eventos
+        JPanel logPanel = new JPanel(new BorderLayout());
+        logPanel.setBackground(COLOR_PANEL);
+        TitledBorder logBorder = BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Color.YELLOW), "EVENT LOG");
+        logBorder.setTitleColor(Color.YELLOW);
+        logPanel.setBorder(logBorder);
+
+        logArea = new JTextArea();
+        logArea.setBackground(new Color(10, 10, 30));
+        logArea.setForeground(Color.GREEN);
+        logArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        logArea.setEditable(false);
+        logArea.setLineWrap(true);
+        logArea.setWrapStyleWord(true);
+
+        JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll.setPreferredSize(new Dimension(0, 150));
+        logPanel.add(logScroll, BorderLayout.CENTER);
+
+        panel.add(topPanel, BorderLayout.CENTER);
+        panel.add(logPanel, BorderLayout.SOUTH);
+
         return panel;
     }
 
     private JPanel createFooter() {
         JPanel panel = new JPanel(new GridLayout(1, 2, 10, 10));
         panel.setBackground(COLOR_BG);
-        panel.setPreferredSize(new Dimension(0, 150));
+        panel.setPreferredSize(new Dimension(0, 130));
+        panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
 
-        readySuspendedModel = new DefaultTableModel(new String[] { "ID", "Process", "Prio" }, 0);
-        blockedSuspendedModel = new DefaultTableModel(new String[] { "ID", "Process", "Wait" }, 0);
-
-        panel.add(createQueuePanel("Ready-Suspended (Disk)", readySuspendedModel));
-        panel.add(createQueuePanel("Blocked-Suspended (Disk)", blockedSuspendedModel));
+        panel.add(createQueuePanel("READY-SUSPENDED (Disk)", readySuspendedModel));
+        panel.add(createQueuePanel("BLOCKED-SUSPENDED (Disk)", blockedSuspendedModel));
         return panel;
     }
 
-    // El Main original se queda solo para pruebas simples de visualización
+    // Main para pruebas de visualización
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new MainWindow().setVisible(true));
     }
 }
 
-// --- CLASE PERSONALIZADA CORREGIDA (Texto fijo + Cambio de color) ---
+// --- CLASE EmergencyButton (sin cambios) ---
 class EmergencyButton extends JButton {
 
     public EmergencyButton() {
@@ -262,8 +402,6 @@ class EmergencyButton extends JButton {
         int w = getWidth();
         int h = getHeight();
 
-        // --- 1. ELEMENTOS ESTÁTICOS (No se mueven al clicar) ---
-
         // A. CARCASA METÁLICA
         g2.setColor(new Color(60, 60, 60));
         g2.fillRoundRect(0, 0, w, h, 20, 20);
@@ -275,79 +413,52 @@ class EmergencyButton extends JButton {
         // B. PLACA BASE ROJA
         g2.setColor(new Color(130, 0, 0));
         g2.fillRoundRect(10, 10, w - 20, h - 20, 10, 10);
-        g2.setColor(new Color(0, 0, 0, 60)); // Sombra
+        g2.setColor(new Color(0, 0, 0, 60));
         g2.drawRoundRect(10, 10, w - 20, h - 20, 10, 10);
 
-        // --- CÁLCULOS DE POSICIÓN ---
-
-        // Definimos el tamaño y posición "base" (sin presionar)
-        int buttonDiameter = Math.min(w, h) - 65;
+        // CÁLCULOS
+        int buttonDiameter = Math.min(w, h) - 50;
         if (buttonDiameter < 10)
             buttonDiameter = 10;
 
         int buttonX = (w - buttonDiameter) / 2;
-        int staticButtonY = 15; // Posición Y original fija
+        int staticButtonY = 12;
 
-        // --- 2. EL TEXTO (Ahora es estático) ---
-        // Usamos staticButtonY para que el texto NO se mueva cuando el botón baje
-        int textY = staticButtonY + buttonDiameter + 22;
-
+        // TEXTO
+        int textY = staticButtonY + buttonDiameter + 16;
         g2.setColor(Color.WHITE);
-        g2.setFont(new Font("SansSerif", Font.BOLD, 11));
+        g2.setFont(new Font("SansSerif", Font.BOLD, 9));
         FontMetrics fm = g2.getFontMetrics();
 
-        String line1 = "EMERGENCY INTERRUPTION";
-        String line2 = "(MICRO-METEORITE)";
-
+        String line1 = "EMERGENCY INT";
         g2.drawString(line1, (w - fm.stringWidth(line1)) / 2, textY);
-        g2.drawString(line2, (w - fm.stringWidth(line2)) / 2, textY + 14);
 
-        // --- 3. ELEMENTOS DINÁMICOS (El botón que se mueve) ---
-
-        // Calculamos el desplazamiento
+        // BOTÓN
         boolean isPressed = getModel().isArmed();
-        int offsetY = isPressed ? 4 : 0; // Baja 4 pixeles si se presiona
+        int offsetY = isPressed ? 3 : 0;
         int currentButtonY = staticButtonY + offsetY;
 
-        // C. ANILLO METÁLICO (Base)
-        // El anillo se queda quieto o se mueve muy poco, aquí lo dejamos quieto para
-        // dar efecto de que el botón entra en él
         g2.setPaint(new GradientPaint(0, staticButtonY, Color.GRAY, 0, staticButtonY + buttonDiameter, Color.WHITE));
-        g2.fillOval(buttonX - 3, staticButtonY - 3, buttonDiameter + 6, buttonDiameter + 6);
+        g2.fillOval(buttonX - 2, staticButtonY - 2, buttonDiameter + 4, buttonDiameter + 4);
 
-        // D. EL BOTÓN (ESFERA) CON CAMBIO DE COLOR
         Point2D center = new Point2D.Float(buttonX + buttonDiameter / 2.0f, currentButtonY + buttonDiameter / 2.0f);
         float radius = buttonDiameter / 2.0f;
         float[] dist = { 0.0f, 0.85f, 1.0f };
 
-        Color[] colors;
-        if (isPressed) {
-            // COLORES AL PRESIONAR (Más oscuros/densos para simular presión y sombra)
-            colors = new Color[] {
-                    new Color(200, 50, 50), // Centro menos brillante
-                    new Color(150, 0, 0), // Cuerpo más oscuro
-                    new Color(50, 0, 0) // Borde muy oscuro
-            };
-        } else {
-            // COLORES NORMALES (Brillantes)
-            colors = new Color[] {
-                    new Color(255, 80, 80), // Centro brillante
-                    new Color(200, 0, 0), // Rojo estándar
-                    new Color(100, 0, 0) // Borde oscuro
-            };
-        }
+        Color[] colors = isPressed
+                ? new Color[] { new Color(200, 50, 50), new Color(150, 0, 0), new Color(50, 0, 0) }
+                : new Color[] { new Color(255, 80, 80), new Color(200, 0, 0), new Color(100, 0, 0) };
 
         RadialGradientPaint spherePaint = new RadialGradientPaint(center, radius, dist, colors);
         g2.setPaint(spherePaint);
         g2.fillOval(buttonX, currentButtonY, buttonDiameter, buttonDiameter);
 
-        // E. BRILLO SUPERIOR (Glossy)
-        // El brillo se mueve con el botón
+        // BRILLO
         g2.setPaint(new LinearGradientPaint(
                 0, currentButtonY, 0, currentButtonY + buttonDiameter / 2,
                 new float[] { 0f, 1f },
                 new Color[] { new Color(255, 255, 255, 140), new Color(255, 255, 255, 0) }));
-        g2.fillOval(buttonX + (buttonDiameter / 4), currentButtonY + 5, buttonDiameter / 2, buttonDiameter / 3);
+        g2.fillOval(buttonX + (buttonDiameter / 4), currentButtonY + 4, buttonDiameter / 2, buttonDiameter / 3);
 
         g2.dispose();
     }
