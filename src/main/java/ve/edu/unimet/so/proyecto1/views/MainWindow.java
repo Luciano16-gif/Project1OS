@@ -23,6 +23,7 @@ public class MainWindow extends JFrame {
     // --- COMPONENTES DINÁMICOS ---
     private JLabel clockLabel;
     private JLabel cpuLabel;
+    private JLabel cpuDetailsLabel; // Atributos del proceso (Prio, PC, MAR, etc)
     private JLabel cpuModeLabel; // Indicador USER/KERNEL
     private JProgressBar instructionBar;
     private JProgressBar memoryBar;
@@ -33,8 +34,13 @@ public class MainWindow extends JFrame {
     private JButton startBtn;
     private JButton pauseBtn;
     private JButton stepBtn;
-    private JButton generateBtn;
-    private JButton algoBtn; // Botón para cambiar algoritmo
+    private JButton gen1Btn;
+    private JButton generateBtn; // GEN 5
+    private JButton gen20Btn;
+    private JComboBox<String> algoCombo; // Dropdown de algoritmos
+    private JButton speedUpBtn;
+    private JButton speedDownBtn;
+    private JTextField speedField; // Campo de velocidad del reloj
 
     // --- MODELOS DE TABLAS (AbstractTableModel) ---
     private PCBTableModel newModel;
@@ -160,6 +166,23 @@ public class MainWindow extends JFrame {
         runningModel.updateFromSnapshot(snapshot, globalTick);
     }
 
+    /** Actualiza los detalles del proceso en ejecución (Prio, PC, MAR, Deadline) */
+    public void updateRunningDetails(PCB running, long globalTick) {
+        if (running == null) {
+            cpuDetailsLabel.setText(" ");
+        } else {
+            long deadline = running.getDeadlineTick();
+            long remaining = deadline - globalTick;
+            String details = String.format("Prio: %d  |  PC: %d  |  MAR: %d  |  Deadline: %d (%+d)",
+                    running.getPriority(),
+                    running.getProgramCounter(),
+                    running.getMar(),
+                    deadline,
+                    remaining);
+            cpuDetailsLabel.setText(details);
+        }
+    }
+
     public void updateBlockedTable(PCB[] snapshot, long globalTick) {
         blockedModel.updateFromSnapshot(snapshot, globalTick);
     }
@@ -248,12 +271,36 @@ public class MainWindow extends JFrame {
         return stepBtn;
     }
 
+    public JButton getGen1Button() {
+        return gen1Btn;
+    }
+
     public JButton getGenerateButton() {
         return generateBtn;
     }
 
-    public JButton getAlgoButton() {
-        return algoBtn;
+    public JButton getGen20Button() {
+        return gen20Btn;
+    }
+
+    public JComboBox<String> getAlgoCombo() {
+        return algoCombo;
+    }
+
+    public JButton getSpeedUpButton() {
+        return speedUpBtn;
+    }
+
+    public JButton getSpeedDownButton() {
+        return speedDownBtn;
+    }
+
+    public JTextField getSpeedField() {
+        return speedField;
+    }
+
+    public void updateSpeedField(int speedMs) {
+        speedField.setText(String.valueOf(speedMs));
     }
 
     // =================== CREACIÓN DE PANELES ===================
@@ -274,14 +321,40 @@ public class MainWindow extends JFrame {
         startBtn = createControlButton("▶ START", new Color(0, 150, 0));
         pauseBtn = createControlButton("⏸ PAUSE", new Color(200, 150, 0));
         stepBtn = createControlButton("⏭ STEP", new Color(100, 149, 237));
-        generateBtn = createControlButton("+ GEN 5", new Color(150, 100, 200));
-        algoBtn = createControlButton("⚙ ALGO", new Color(200, 100, 50));
+        gen1Btn = createControlButton("+1", new Color(100, 100, 180));
+        generateBtn = createControlButton("+5", new Color(150, 100, 200));
+        gen20Btn = createControlButton("+20", new Color(180, 80, 150));
+
+        // Dropdown de algoritmos
+        String[] algorithms = { "FCFS", "RR", "SRT", "PRIORITY", "EDF" };
+        algoCombo = new JComboBox<>(algorithms);
+        algoCombo.setFont(new Font("Monospaced", Font.BOLD, 11));
+        algoCombo.setBackground(new Color(50, 50, 80));
+        algoCombo.setForeground(Color.ORANGE);
+        algoCombo.setToolTipText("Algoritmo de planificación");
+        speedDownBtn = createControlButton("⏪", new Color(80, 80, 120));
+
+        // Campo de velocidad editable
+        speedField = new JTextField("200", 4);
+        speedField.setHorizontalAlignment(JTextField.CENTER);
+        speedField.setFont(new Font("Monospaced", Font.BOLD, 12));
+        speedField.setBackground(new Color(30, 30, 50));
+        speedField.setForeground(Color.CYAN);
+        speedField.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 120)));
+        speedField.setToolTipText("Velocidad en ms (10-2000)");
+
+        speedUpBtn = createControlButton("⏩", new Color(80, 80, 120));
 
         controlPanel.add(startBtn);
         controlPanel.add(pauseBtn);
         controlPanel.add(stepBtn);
+        controlPanel.add(gen1Btn);
         controlPanel.add(generateBtn);
-        controlPanel.add(algoBtn);
+        controlPanel.add(gen20Btn);
+        controlPanel.add(algoCombo);
+        controlPanel.add(speedDownBtn);
+        controlPanel.add(speedField);
+        controlPanel.add(speedUpBtn);
 
         // Panel derecho con clock y modo CPU
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));
@@ -366,8 +439,19 @@ public class MainWindow extends JFrame {
         instructionBar.setValue(0);
         instructionBar.setStringPainted(true);
 
+        // Label para atributos del proceso (más pequeño y menos prominente)
+        cpuDetailsLabel = new JLabel(" ", SwingConstants.CENTER);
+        cpuDetailsLabel.setFont(new Font("Consolas", Font.PLAIN, 11));
+        cpuDetailsLabel.setForeground(new Color(150, 170, 200));
+
+        // Panel inferior para barra e info
+        JPanel cpuBottomPanel = new JPanel(new BorderLayout(0, 2));
+        cpuBottomPanel.setBackground(COLOR_PANEL);
+        cpuBottomPanel.add(instructionBar, BorderLayout.NORTH);
+        cpuBottomPanel.add(cpuDetailsLabel, BorderLayout.SOUTH);
+
         cpuPanel.add(cpuLabel, BorderLayout.CENTER);
-        cpuPanel.add(instructionBar, BorderLayout.SOUTH);
+        cpuPanel.add(cpuBottomPanel, BorderLayout.SOUTH);
 
         // Memory + Emergency Button Panel - altura fija
         JPanel memPanel = new JPanel(new BorderLayout(5, 5));

@@ -76,6 +76,14 @@ public class GUIRealisticTest {
             stepSimulation();
         });
 
+        // Botón GENERATE 1 - genera 1 proceso aleatorio
+        window.getGen1Button().addActionListener(e -> {
+            long currentTick = os.getGlobalTick();
+            PCB p = ProcessGenerator.createRandomProcess(currentTick);
+            os.submitNewProcess(p);
+            System.out.println("📦 Generado 1 proceso: " + p.getName());
+        });
+
         // Botón GENERATE 5 - genera 5 procesos aleatorios
         window.getGenerateButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
@@ -83,7 +91,37 @@ public class GUIRealisticTest {
             for (PCB p : batch) {
                 os.submitNewProcess(p);
             }
-            System.out.println("📦 Generados 5 procesos aleatorios en tick " + currentTick);
+            System.out.println("📦 Generados 5 procesos aleatorios");
+        });
+
+        // Botón GENERATE 20 - genera 20 procesos (fuerza swap)
+        window.getGen20Button().addActionListener(e -> {
+            long currentTick = os.getGlobalTick();
+            PCB[] batch = ProcessGenerator.generateRandomBatch(20, currentTick);
+            for (PCB p : batch) {
+                os.submitNewProcess(p);
+            }
+            System.out.println("📦 Generados 20 procesos (memoria llena → swap!)");
+        });
+
+        // Botón SPEED DOWN - más lento
+        window.getSpeedDownButton().addActionListener(e -> {
+            adjustSpeed(100); // +100ms
+        });
+
+        // Botón SPEED UP - más rápido
+        window.getSpeedUpButton().addActionListener(e -> {
+            adjustSpeed(-50); // -50ms
+        });
+
+        // Campo de velocidad - entrada manual
+        window.getSpeedField().addActionListener(e -> {
+            try {
+                int newSpeed = Integer.parseInt(window.getSpeedField().getText().trim());
+                setSpeed(newSpeed);
+            } catch (NumberFormatException ex) {
+                window.updateSpeedField(currentCycleDurationMs); // Restaurar valor válido
+            }
         });
 
         // Botón de EMERGENCIA - genera interrupción + proceso
@@ -101,38 +139,21 @@ public class GUIRealisticTest {
                     "🚨 EMERGENCIA: Interrupción + Proceso " + emergency.getName() + " en tick " + currentTick);
         });
 
-        // Botón de CAMBIO DE ALGORITMO - cicla entre todos
-        window.getAlgoButton().addActionListener(e -> {
-            cycleSchedulingAlgorithm();
+        // ComboBox de ALGORITMO - selección directa
+        window.getAlgoCombo().addActionListener(e -> {
+            String selected = (String) window.getAlgoCombo().getSelectedItem();
+            setSchedulingAlgorithm(selected);
         });
 
         // Estado inicial de botones
         window.getPauseButton().setEnabled(false);
         window.getStepButton().setEnabled(true); // Permitir step antes de iniciar
-        updateAlgoButtonLabel(); // Mostrar algoritmo actual
     }
 
-    // Índice actual del algoritmo
-    private int currentAlgoIndex = 0;
-    private static final ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy[] ALGORITHMS = {
-            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.FCFS,
-            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.RR,
-            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.SRT,
-            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.PRIORITY,
-            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.EDF
-    };
-
-    private void cycleSchedulingAlgorithm() {
-        currentAlgoIndex = (currentAlgoIndex + 1) % ALGORITHMS.length;
-        var newAlgo = ALGORITHMS[currentAlgoIndex];
-        os.setAlgorithm(newAlgo);
-        updateAlgoButtonLabel();
-        System.out.println("🔄 Algoritmo cambiado a: " + newAlgo.name());
-    }
-
-    private void updateAlgoButtonLabel() {
-        var algo = ALGORITHMS[currentAlgoIndex];
-        window.getAlgoButton().setText("⚙ " + algo.name());
+    private void setSchedulingAlgorithm(String name) {
+        var policy = ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.valueOf(name);
+        os.setAlgorithm(policy);
+        System.out.println("🔄 Algoritmo cambiado a: " + name);
     }
 
     private void startGUIRefreshLoop() {
@@ -162,6 +183,10 @@ public class GUIRealisticTest {
             } else {
                 window.updateCPU(null, 0, 0);
             }
+
+            // Actualizar detalles del proceso en ejecución
+            PCB runningProcess = (running.length > 0) ? running[0] : null;
+            window.updateRunningDetails(runningProcess, globalTick);
 
             // Actualizar todas las tablas usando snapshots directos
             window.updateNewTable(os.snapshotNew(), globalTick);
@@ -213,6 +238,35 @@ public class GUIRealisticTest {
 
     public void stepSimulation() {
         clock.stepOnce();
+    }
+
+    // Velocidad actual del ciclo en ms
+    private int currentCycleDurationMs = CYCLE_DURATION_MS;
+
+    private void adjustSpeed(int deltaMs) {
+        currentCycleDurationMs += deltaMs;
+        // Limitar entre 10ms (muy rápido) y 2000ms (muy lento)
+        if (currentCycleDurationMs < 10)
+            currentCycleDurationMs = 10;
+        if (currentCycleDurationMs > 2000)
+            currentCycleDurationMs = 2000;
+
+        clock.setCycleDurationMs(currentCycleDurationMs);
+        window.updateSpeedField(currentCycleDurationMs);
+        System.out.println("⏱ Velocidad ajustada: " + currentCycleDurationMs + "ms por ciclo");
+    }
+
+    private void setSpeed(int speedMs) {
+        // Limitar entre 10ms (muy rápido) y 2000ms (muy lento)
+        if (speedMs < 10)
+            speedMs = 10;
+        if (speedMs > 2000)
+            speedMs = 2000;
+
+        currentCycleDurationMs = speedMs;
+        clock.setCycleDurationMs(currentCycleDurationMs);
+        window.updateSpeedField(currentCycleDurationMs);
+        System.out.println("⏱ Velocidad establecida: " + currentCycleDurationMs + "ms por ciclo");
     }
 
     // --- MAIN ---
