@@ -22,14 +22,14 @@ Crear un nuevo archivo de pruebas (`GUIRealisticTest.java`) que demuestre el fun
 - [x] Setup inicial con `OperatingSystem` y `ClockThread`
 - [x] Generador de procesos aleatorios con PCB nuevo
 - [x] Loop de actualización usando snapshots reales
-- [ ] Conexión de controles (Start/Pause/Step) - botones en GUI
+- [x] Conexión de controles (Start/Pause/Step) - botones en GUI
 
 ### Fase 4: Escenarios de Prueba
-- [ ] Escenario 1: Procesos básicos sin I/O
-- [ ] Escenario 2: Procesos con I/O y bloqueo
-- [ ] Escenario 3: Memoria llena y swapping
-- [ ] Escenario 4: Interrupciones y modo KERNEL
-- [ ] Escenario 5: Cambio de algoritmo en ejecución
+- [x] Escenario 1: Procesos básicos sin I/O
+- [x] Escenario 2: Procesos con I/O y bloqueo
+- [x] Escenario 3: Memoria llena y swapping
+- [x] Escenario 4: Interrupciones y modo KERNEL
+- [x] Escenario 5: Cambio de algoritmo en ejecución
 
 ### Fase 5: Verificación
 - [ ] Compilar y ejecutar sin errores

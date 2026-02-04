@@ -29,6 +29,13 @@ public class MainWindow extends JFrame {
     private JTextArea logArea; // Panel de log de eventos
     private EmergencyButton emergencyBtn;
 
+    // --- BOTONES DE CONTROL ---
+    private JButton startBtn;
+    private JButton pauseBtn;
+    private JButton stepBtn;
+    private JButton generateBtn;
+    private JButton algoBtn; // Botón para cambiar algoritmo
+
     // --- MODELOS DE TABLAS (AbstractTableModel) ---
     private PCBTableModel newModel;
     private PCBTableModel readyModel;
@@ -76,9 +83,11 @@ public class MainWindow extends JFrame {
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         mainPanel.add(rightPanel, BorderLayout.EAST);
 
-        // Ajustar tamaños
-        leftPanel.setPreferredSize(new Dimension(280, 0));
-        rightPanel.setPreferredSize(new Dimension(280, 0));
+        // Ajustar tamaños - tablas más anchas, centro más compacto
+        leftPanel.setPreferredSize(new Dimension(660, 0));
+        rightPanel.setPreferredSize(new Dimension(660, 0));
+        centerPanel.setPreferredSize(new Dimension(300, 0));
+        centerPanel.setMaximumSize(new Dimension(300, Integer.MAX_VALUE));
 
         add(mainPanel, BorderLayout.CENTER);
 
@@ -222,9 +231,29 @@ public class MainWindow extends JFrame {
         blockedSuspendedModel.clear();
     }
 
-    // --- Getter para el botón de emergencia ---
+    // --- Getters para botones de control ---
     public EmergencyButton getEmergencyButton() {
         return emergencyBtn;
+    }
+
+    public JButton getStartButton() {
+        return startBtn;
+    }
+
+    public JButton getPauseButton() {
+        return pauseBtn;
+    }
+
+    public JButton getStepButton() {
+        return stepBtn;
+    }
+
+    public JButton getGenerateButton() {
+        return generateBtn;
+    }
+
+    public JButton getAlgoButton() {
+        return algoBtn;
     }
 
     // =================== CREACIÓN DE PANELES ===================
@@ -238,25 +267,53 @@ public class MainWindow extends JFrame {
         title.setForeground(COLOR_TEXT);
         title.setFont(new Font("Consolas", Font.BOLD, 20));
 
+        // Panel central con botones de control
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        controlPanel.setBackground(COLOR_PANEL);
+
+        startBtn = createControlButton("▶ START", new Color(0, 150, 0));
+        pauseBtn = createControlButton("⏸ PAUSE", new Color(200, 150, 0));
+        stepBtn = createControlButton("⏭ STEP", new Color(100, 149, 237));
+        generateBtn = createControlButton("+ GEN 5", new Color(150, 100, 200));
+        algoBtn = createControlButton("⚙ ALGO", new Color(200, 100, 50));
+
+        controlPanel.add(startBtn);
+        controlPanel.add(pauseBtn);
+        controlPanel.add(stepBtn);
+        controlPanel.add(generateBtn);
+        controlPanel.add(algoBtn);
+
         // Panel derecho con clock y modo CPU
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 5));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));
         rightPanel.setBackground(COLOR_PANEL);
 
         cpuModeLabel = new JLabel("MODE: USER");
         cpuModeLabel.setForeground(Color.GREEN);
-        cpuModeLabel.setFont(new Font("Monospaced", Font.BOLD, 16));
+        cpuModeLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
 
-        clockLabel = new JLabel("MISSION CLOCK: Cycle 0000  ");
+        clockLabel = new JLabel("CYCLE: 0000  ");
         clockLabel.setForeground(Color.GREEN);
-        clockLabel.setFont(new Font("Monospaced", Font.BOLD, 20));
+        clockLabel.setFont(new Font("Monospaced", Font.BOLD, 18));
 
         rightPanel.add(cpuModeLabel);
         rightPanel.add(clockLabel);
 
         panel.add(title, BorderLayout.WEST);
+        panel.add(controlPanel, BorderLayout.CENTER);
         panel.add(rightPanel, BorderLayout.EAST);
-        panel.setPreferredSize(new Dimension(0, 50));
+        panel.setPreferredSize(new Dimension(0, 55));
         return panel;
+    }
+
+    private JButton createControlButton(String text, Color bgColor) {
+        JButton btn = new JButton(text);
+        btn.setBackground(bgColor);
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btn.setPreferredSize(new Dimension(90, 30));
+        btn.setBorder(BorderFactory.createRaisedBevelBorder());
+        return btn;
     }
 
     private JPanel createQueuePanel(String title, TableModel model) {
@@ -312,13 +369,14 @@ public class MainWindow extends JFrame {
         cpuPanel.add(cpuLabel, BorderLayout.CENTER);
         cpuPanel.add(instructionBar, BorderLayout.SOUTH);
 
-        // Memory + Emergency Button Panel
+        // Memory + Emergency Button Panel - altura fija
         JPanel memPanel = new JPanel(new BorderLayout(5, 5));
         memPanel.setBackground(COLOR_PANEL);
         TitledBorder memBorder = BorderFactory.createTitledBorder(
                 BorderFactory.createLineBorder(Color.ORANGE), "MAIN MEMORY");
         memBorder.setTitleColor(Color.ORANGE);
         memPanel.setBorder(memBorder);
+        memPanel.setPreferredSize(new Dimension(0, 140)); // Altura para incluir título
 
         memoryBar = new JProgressBar();
         memoryBar.setValue(0);
@@ -327,19 +385,18 @@ public class MainWindow extends JFrame {
         memoryBar.setForeground(new Color(0, 200, 0));
 
         emergencyBtn = new EmergencyButton();
-        emergencyBtn.setPreferredSize(new Dimension(0, 100));
-        JPanel btnContainer = new JPanel(new BorderLayout());
+        emergencyBtn.setPreferredSize(new Dimension(250, 85)); // Tamaño decente
+        JPanel btnContainer = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 5));
         btnContainer.setBackground(COLOR_PANEL);
-        btnContainer.setBorder(BorderFactory.createEmptyBorder(10, 30, 10, 30));
-        btnContainer.add(emergencyBtn, BorderLayout.CENTER);
+        btnContainer.add(emergencyBtn);
 
         memPanel.add(memoryBar, BorderLayout.NORTH);
         memPanel.add(btnContainer, BorderLayout.CENTER);
 
         topPanel.add(cpuPanel, BorderLayout.NORTH);
-        topPanel.add(memPanel, BorderLayout.CENTER);
+        topPanel.add(memPanel, BorderLayout.SOUTH); // Ahora está al sur con tamaño fijo
 
-        // Panel inferior: Log de eventos
+        // Panel central: Log de eventos - ocupa el espacio restante
         JPanel logPanel = new JPanel(new BorderLayout());
         logPanel.setBackground(COLOR_PANEL);
         TitledBorder logBorder = BorderFactory.createTitledBorder(
@@ -356,11 +413,10 @@ public class MainWindow extends JFrame {
         logArea.setWrapStyleWord(true);
 
         JScrollPane logScroll = new JScrollPane(logArea);
-        logScroll.setPreferredSize(new Dimension(0, 150));
         logPanel.add(logScroll, BorderLayout.CENTER);
 
-        panel.add(topPanel, BorderLayout.CENTER);
-        panel.add(logPanel, BorderLayout.SOUTH);
+        panel.add(topPanel, BorderLayout.NORTH); // CPU y memoria arriba
+        panel.add(logPanel, BorderLayout.CENTER); // Log ocupa el centro (espacio restante)
 
         return panel;
     }

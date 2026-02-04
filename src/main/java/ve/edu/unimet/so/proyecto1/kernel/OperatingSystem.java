@@ -304,6 +304,18 @@ public class OperatingSystem {
         eventQueue.enqueue(event);
     }
 
+    /**
+     * Permite generar una interrupción externa desde la GUI
+     */
+    public void submitInterrupt(String interruptType, int costTicks) {
+        if (interruptType == null || interruptType.isBlank())
+            return;
+        if (costTicks <= 0)
+            costTicks = 1;
+        KernelEvent event = new KernelEvent(interruptType, globalTick, costTicks);
+        eventQueue.enqueue(event);
+    }
+
     void logEvent(String message) {
         if (message == null)
             return;

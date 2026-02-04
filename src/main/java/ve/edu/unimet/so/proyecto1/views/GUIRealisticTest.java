@@ -35,8 +35,8 @@ public class GUIRealisticTest {
         // 4. Generar procesos iniciales
         generateInitialProcesses();
 
-        // 5. Configurar botón de emergencia
-        setupEmergencyButton();
+        // 5. Configurar botones de control y emergencia
+        setupControlButtons();
 
         // 6. Iniciar el loop de actualización de GUI
         startGUIRefreshLoop();
@@ -54,14 +54,85 @@ public class GUIRealisticTest {
         System.out.println("Generados " + batch.length + " procesos iniciales");
     }
 
-    private void setupEmergencyButton() {
-        window.getEmergencyButton().addActionListener(e -> {
-            // Crear proceso de emergencia al presionar el botón
+    private void setupControlButtons() {
+        // Botón START
+        window.getStartButton().addActionListener(e -> {
+            startSimulation();
+            window.getStartButton().setEnabled(false);
+            window.getPauseButton().setEnabled(true);
+            window.getStepButton().setEnabled(false);
+        });
+
+        // Botón PAUSE
+        window.getPauseButton().addActionListener(e -> {
+            pauseSimulation();
+            window.getStartButton().setEnabled(true);
+            window.getPauseButton().setEnabled(false);
+            window.getStepButton().setEnabled(true);
+        });
+
+        // Botón STEP (solo cuando está pausado)
+        window.getStepButton().addActionListener(e -> {
+            stepSimulation();
+        });
+
+        // Botón GENERATE 5 - genera 5 procesos aleatorios
+        window.getGenerateButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
+            PCB[] batch = ProcessGenerator.generateRandomBatch(5, currentTick);
+            for (PCB p : batch) {
+                os.submitNewProcess(p);
+            }
+            System.out.println("📦 Generados 5 procesos aleatorios en tick " + currentTick);
+        });
+
+        // Botón de EMERGENCIA - genera interrupción + proceso
+        window.getEmergencyButton().addActionListener(e -> {
+            long currentTick = os.getGlobalTick();
+
+            // 1. Generar interrupción (activa modo KERNEL)
+            os.submitInterrupt("MICROMETEORITO_MANUAL", 3);
+
+            // 2. Crear proceso de emergencia de alta prioridad
             PCB emergency = ProcessGenerator.createEmergencyProcess(currentTick);
             os.submitNewProcess(emergency);
-            System.out.println("🚨 EMERGENCIA: Proceso " + emergency.getName() + " creado en tick " + currentTick);
+
+            System.out.println(
+                    "🚨 EMERGENCIA: Interrupción + Proceso " + emergency.getName() + " en tick " + currentTick);
         });
+
+        // Botón de CAMBIO DE ALGORITMO - cicla entre todos
+        window.getAlgoButton().addActionListener(e -> {
+            cycleSchedulingAlgorithm();
+        });
+
+        // Estado inicial de botones
+        window.getPauseButton().setEnabled(false);
+        window.getStepButton().setEnabled(true); // Permitir step antes de iniciar
+        updateAlgoButtonLabel(); // Mostrar algoritmo actual
+    }
+
+    // Índice actual del algoritmo
+    private int currentAlgoIndex = 0;
+    private static final ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy[] ALGORITHMS = {
+            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.FCFS,
+            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.RR,
+            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.SRT,
+            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.PRIORITY,
+            ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.EDF
+    };
+
+    private void cycleSchedulingAlgorithm() {
+        currentAlgoIndex = (currentAlgoIndex + 1) % ALGORITHMS.length;
+        var newAlgo = ALGORITHMS[currentAlgoIndex];
+        os.setAlgorithm(newAlgo);
+        updateAlgoButtonLabel();
+        System.out.println("🔄 Algoritmo cambiado a: " + newAlgo.name());
+    }
+
+    private void updateAlgoButtonLabel() {
+        var algo = ALGORITHMS[currentAlgoIndex];
+        window.getAlgoButton().setText("⚙ " + algo.name());
     }
 
     private void startGUIRefreshLoop() {
@@ -147,18 +218,12 @@ public class GUIRealisticTest {
     // --- MAIN ---
     public static void main(String[] args) {
         System.out.println("=== GUIRealisticTest - Prueba de GUI con Kernel Real ===");
-        System.out.println("Iniciando...\n");
+        System.out.println("Use los botones START/PAUSE/STEP para controlar la simulación\n");
 
         SwingUtilities.invokeLater(() -> {
             GUIRealisticTest test = new GUIRealisticTest();
             test.show();
-
-            // Auto-iniciar la simulación después de 1 segundo
-            Timer autoStart = new Timer(1000, e -> {
-                test.startSimulation();
-            });
-            autoStart.setRepeats(false);
-            autoStart.start();
+            // La simulación ahora se controla con los botones en la GUI
         });
     }
 }
