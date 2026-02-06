@@ -3,6 +3,7 @@
  */
 package ve.edu.unimet.so.proyecto1.kernel;
 
+import java.util.concurrent.Semaphore;
 import ve.edu.unimet.so.proyecto1.datastructures.Compare;
 import ve.edu.unimet.so.proyecto1.datastructures.LinkedQueue;
 import ve.edu.unimet.so.proyecto1.datastructures.OrderedList;
@@ -34,6 +35,7 @@ public class OperatingSystem {
     private final SimpleList<PCB> blockedList;
     private final SimpleList<PCB> terminatedList;
     private final SimpleList<String> eventLog;
+    private final Semaphore stateLock;
     private int maxLogEntries = 200;
 
     private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
@@ -99,6 +101,7 @@ public class OperatingSystem {
         this.blockedList = new SimpleList<>();
         this.terminatedList = new SimpleList<>();
         this.eventLog = new SimpleList<>();
+        this.stateLock = new Semaphore(1, true);
         this.memoryManager = new MemoryManager(this);
         this.eventQueue = new EventQueue();
         this.pendingInterrupts = new SimpleList<>();
@@ -107,50 +110,55 @@ public class OperatingSystem {
     // --- Lógica Principal del Ciclo ---
 
     public void executeOneCycle() {
-        globalTick++;
+        lockState();
+        try {
+            globalTick++;
 
-        processEvents();
-        if (isrTicksRemaining > 0) {
-            isrTicksRemaining--;
-            if (isrTicksRemaining == 0) {
-                long latency = (lastInterruptDetectedTick >= 0)
-                        ? (globalTick - lastInterruptDetectedTick)
-                        : 0;
-                logEvent("ISR terminada; latencia " + latency + " ticks; servicio " + lastIsrCostTicks + " ticks");
-                if (!pendingInterrupts.isEmpty()) {
-                    KernelEvent next = pendingInterrupts.removeAt(0);
-                    publishEvent(next);
+            processEvents();
+            if (isrTicksRemaining > 0) {
+                isrTicksRemaining--;
+                if (isrTicksRemaining == 0) {
+                    long latency = (lastInterruptDetectedTick >= 0)
+                            ? (globalTick - lastInterruptDetectedTick)
+                            : 0;
+                    logEvent("ISR terminada; latencia " + latency + " ticks; servicio " + lastIsrCostTicks + " ticks");
+                    if (!pendingInterrupts.isEmpty()) {
+                        KernelEvent next = pendingInterrupts.removeAt(0);
+                        publishEvent(next);
+                    }
+                }
+                return;
+            }
+            memoryManager.admitFromNew();
+            if (cpu == null) {
+                scheduleNextProcess();
+            } else if (isPreemptivePolicy()) {
+                PCB bestReady = readyListSorted.peekFirst();
+                if (bestReady != null && shouldPreempt(bestReady, cpu)) {
+                    preemptCurrentProcess();
+                    scheduleNextProcess();
                 }
             }
-            return;
-        }
-        memoryManager.admitFromNew();
-        if (cpu == null) {
-            scheduleNextProcess();
-        } else if (isPreemptivePolicy()) {
-            PCB bestReady = readyListSorted.peekFirst();
-            if (bestReady != null && shouldPreempt(bestReady, cpu)) {
-                preemptCurrentProcess();
-                scheduleNextProcess();
-            }
-        }
-        if (cpu != null) {
-            cpu.executeCycle();
-            cpuQuantumTicks++;
+            if (cpu != null) {
+                cpu.executeCycle();
+                cpuQuantumTicks++;
 
-            if (cpu.hasFinished()) {
-                terminateProcess(cpu);
-                scheduleNextProcess();
-            } else if (cpu.shouldTriggerIO()) {
-                publishEvent(new KernelEvent(KernelEvent.Type.IO_REQUEST, cpu));
-                processEvents();
-                scheduleNextProcess();
+                if (cpu.hasFinished()) {
+                    terminateProcess(cpu);
+                    scheduleNextProcess();
+                } else if (cpu.shouldTriggerIO()) {
+                    publishEvent(new KernelEvent(KernelEvent.Type.IO_REQUEST, cpu));
+                    processEvents();
+                    scheduleNextProcess();
+                }
+                // Verificar Quantum (Solo RR)
+                else if (currentPolicy == SchedulingPolicy.RR && cpuQuantumTicks >= quantum) {
+                    preemptCurrentProcess();
+                    scheduleNextProcess();
+                }
             }
-            // Verificar Quantum (Solo RR)
-            else if (currentPolicy == SchedulingPolicy.RR && cpuQuantumTicks >= quantum) {
-                preemptCurrentProcess();
-                scheduleNextProcess();
-            }
+        } finally {
+            unlockState();
         }
     }
 
@@ -181,12 +189,17 @@ public class OperatingSystem {
      * Agrega un proceso a la cola NEW (para uso externo/GUI)
      */
     public void submitNewProcess(PCB process) {
+        lockState();
+        try {
         if (process == null)
             return;
         newQueue.enqueue(process);
+        } finally {
+            unlockState();
+        }
     }
 
-    public void addProcess(PCB process) {
+    private void addProcess(PCB process) {
         process.setState(ProcessState.READY);
 
         if (isFifoAlgorithm()) {
@@ -196,7 +209,7 @@ public class OperatingSystem {
         }
     }
 
-    public PCB getNextProcess() {
+    private PCB getNextProcess() {
         if (isFifoAlgorithm()) {
             return readyQueueFIFO.dequeue();
         } else {
@@ -204,7 +217,7 @@ public class OperatingSystem {
         }
     }
 
-    public void terminateProcess(PCB process) {
+    private void terminateProcess(PCB process) {
         process.setState(ProcessState.TERMINATED);
         process.setFinishTick(globalTick);
         terminatedList.add(process);
@@ -216,6 +229,8 @@ public class OperatingSystem {
     }
 
     public void setAlgorithm(SchedulingPolicy newPolicy) {
+        lockState();
+        try {
         if (newPolicy == null) {
             throw new IllegalArgumentException("policy must not be null");
         }
@@ -249,6 +264,9 @@ public class OperatingSystem {
             };
             this.readyListSorted = new OrderedList<>(targetComparator);
             tempBuffer.forEach(p -> addProcess(p));
+        }
+        } finally {
+            unlockState();
         }
     }
 
@@ -308,12 +326,17 @@ public class OperatingSystem {
      * Permite generar una interrupción externa desde la GUI
      */
     public void submitInterrupt(String interruptType, int costTicks) {
+        lockState();
+        try {
         if (interruptType == null || interruptType.isBlank())
             return;
         if (costTicks <= 0)
             costTicks = 1;
         KernelEvent event = new KernelEvent(interruptType, globalTick, costTicks);
         eventQueue.enqueue(event);
+        } finally {
+            unlockState();
+        }
     }
 
     void logEvent(String message) {
@@ -326,6 +349,8 @@ public class OperatingSystem {
     }
 
     public String[] snapshotEventLog() {
+        lockState();
+        try {
         // TODO: expose to GUI log panel when UI wiring is ready.
         Object[] arr = eventLog.toArray();
         String[] out = new String[arr.length];
@@ -333,74 +358,122 @@ public class OperatingSystem {
             out[i] = (String) arr[i];
         }
         return out;
+        } finally {
+            unlockState();
+        }
     }
 
     public PCB[] snapshotNew() {
-        return snapshotQueue(newQueue);
+        lockState();
+        try {
+            return snapshotQueue(newQueue);
+        } finally {
+            unlockState();
+        }
     }
 
     public PCB[] snapshotReady() {
-        if (isFifoAlgorithm()) {
-            return snapshotQueue(readyQueueFIFO);
+        lockState();
+        try {
+            if (isFifoAlgorithm()) {
+                return snapshotQueue(readyQueueFIFO);
+            }
+            Object[] arr = readyListSorted.toArray();
+            PCB[] out = new PCB[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                out[i] = (PCB) arr[i];
+            }
+            return out;
+        } finally {
+            unlockState();
         }
-        Object[] arr = readyListSorted.toArray();
-        PCB[] out = new PCB[arr.length];
-        for (int i = 0; i < arr.length; i++) {
-            out[i] = (PCB) arr[i];
-        }
-        return out;
     }
 
     public PCB[] snapshotRunning() {
-        if (cpu == null)
-            return new PCB[0];
-        return new PCB[] { cpu };
+        lockState();
+        try {
+            if (cpu == null)
+                return new PCB[0];
+            return new PCB[] { cpu };
+        } finally {
+            unlockState();
+        }
     }
 
     public PCB[] snapshotBlocked() {
-        Object[] arr = blockedList.toArray();
-        PCB[] out = new PCB[arr.length];
-        for (int i = 0; i < arr.length; i++) {
-            out[i] = (PCB) arr[i];
+        lockState();
+        try {
+            Object[] arr = blockedList.toArray();
+            PCB[] out = new PCB[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                out[i] = (PCB) arr[i];
+            }
+            return out;
+        } finally {
+            unlockState();
         }
-        return out;
     }
 
     public PCB[] snapshotBlockedSuspended() {
-        return memoryManager.snapshotBlockedSuspended();
+        lockState();
+        try {
+            return memoryManager.snapshotBlockedSuspended();
+        } finally {
+            unlockState();
+        }
     }
 
     public PCB[] snapshotReadySuspended() {
-        return memoryManager.snapshotReadySuspended();
+        lockState();
+        try {
+            return memoryManager.snapshotReadySuspended();
+        } finally {
+            unlockState();
+        }
     }
 
     public PCB[] snapshotTerminated() {
-        Object[] arr = terminatedList.toArray();
-        PCB[] out = new PCB[arr.length];
-        for (int i = 0; i < arr.length; i++) {
-            out[i] = (PCB) arr[i];
+        lockState();
+        try {
+            Object[] arr = terminatedList.toArray();
+            PCB[] out = new PCB[arr.length];
+            for (int i = 0; i < arr.length; i++) {
+                out[i] = (PCB) arr[i];
+            }
+            return out;
+        } finally {
+            unlockState();
         }
-        return out;
     }
 
     public Object[] pcbToRow(PCB p) {
-        if (p == null)
-            return new Object[0];
-        long remainingDeadline = p.getDeadlineRemaining(globalTick);
-        return new Object[] {
-                p.getPid(),
-                p.getName(),
-                p.getState().name(),
-                p.getProgramCounter(),
-                p.getMar(),
-                p.getPriority(),
-                p.getRemainingInstructions(),
-                remainingDeadline
-        };
+        lockState();
+        try {
+            if (p == null)
+                return new Object[0];
+            long remainingDeadline = p.getDeadlineRemaining(globalTick);
+            return new Object[] {
+                    p.getPid(),
+                    p.getName(),
+                    p.getState().name(),
+                    p.getProgramCounter(),
+                    p.getMar(),
+                    p.getPriority(),
+                    p.getRemainingInstructions(),
+                    remainingDeadline
+            };
+        } finally {
+            unlockState();
+        }
     }
 
     public boolean isInKernelMode() {
-        return isrTicksRemaining > 0;
+        lockState();
+        try {
+            return isrTicksRemaining > 0;
+        } finally {
+            unlockState();
+        }
     }
 
     private PCB[] snapshotQueue(LinkedQueue<PCB> queue) {
@@ -462,14 +535,42 @@ public class OperatingSystem {
     }
 
     public PCB getCpu() {
-        return cpu;
+        lockState();
+        try {
+            return cpu;
+        } finally {
+            unlockState();
+        }
     }
 
     public int getQuantum() {
-        return quantum;
+        lockState();
+        try {
+            return quantum;
+        } finally {
+            unlockState();
+        }
     }
 
     public void setQuantum(int quantum) {
-        this.quantum = quantum;
+        lockState();
+        try {
+            this.quantum = quantum;
+        } finally {
+            unlockState();
+        }
+    }
+
+    private void lockState() {
+        try {
+            stateLock.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void unlockState() {
+        stateLock.release();
     }
 }
