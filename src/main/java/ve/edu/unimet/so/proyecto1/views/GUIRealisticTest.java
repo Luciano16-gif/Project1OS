@@ -201,7 +201,81 @@ public class GUIRealisticTest {
 
             // Actualizar memoria (porcentaje de uso)
             updateMemoryBar();
+
+            // Actualizar métricas
+            updateMetrics(globalTick, running);
         });
+    }
+
+    // --- Contadores para métricas ---
+    private long lastProcessedTick = -1;
+    private long cpuBusyTicks = 0; // Acumulativo total
+
+    // Ventana deslizante para utilización reciente (últimos 50 ticks)
+    private static final int WINDOW_SIZE = 50;
+    private final boolean[] cpuWindow = new boolean[WINDOW_SIZE];
+    private int windowIndex = 0;
+    private int windowBusyCount = 0;
+
+    private void updateMetrics(long globalTick, PCB[] running) {
+        boolean isBusy = running.length > 0 && running[0] != null;
+
+        // Solo contar una vez por tick (evitar doble conteo por refresh de GUI)
+        if (globalTick > lastProcessedTick) {
+            // Acumulativo total
+            if (isBusy) {
+                cpuBusyTicks++;
+            }
+
+            // Ventana deslizante: restar el valor antiguo, sumar el nuevo
+            if (cpuWindow[windowIndex]) {
+                windowBusyCount--;
+            }
+            cpuWindow[windowIndex] = isBusy;
+            if (isBusy) {
+                windowBusyCount++;
+            }
+            windowIndex = (windowIndex + 1) % WINDOW_SIZE;
+
+            lastProcessedTick = globalTick;
+        }
+
+        // Calcular métricas desde TERMINATED
+        PCB[] terminated = os.snapshotTerminated();
+        int terminatedCount = terminated.length;
+        int successCount = 0;
+        long totalWaitTicks = 0;
+
+        for (int i = 0; i < terminatedCount; i++) {
+            PCB p = terminated[i];
+            if (p != null) {
+                // Éxito = terminó antes o en el deadline
+                if (p.getFinishTick() <= p.getDeadlineTick()) {
+                    successCount++;
+                }
+                totalWaitTicks += p.getWaitingTime();
+            }
+        }
+
+        // Calcular valores
+        double successRate = (terminatedCount > 0) ? (double) successCount / terminatedCount : 0.0;
+        double throughput = (globalTick > 0) ? (double) terminatedCount / globalTick : 0.0;
+        double avgWait = (terminatedCount > 0) ? (double) totalWaitTicks / terminatedCount : 0.0;
+
+        // CPU: usar ventana deslizante para valor reciente
+        int windowFilled = (int) Math.min(globalTick, WINDOW_SIZE);
+        double cpuUtilRecent = (windowFilled > 0) ? (double) windowBusyCount / windowFilled : 0.0;
+
+        // CPU acumulativo para el label
+        double cpuUtilTotal = (globalTick > 0) ? (double) cpuBusyTicks / globalTick : 0.0;
+
+        // Actualizar panel de métricas (mostrar ambos: reciente y total)
+        window.updateMetrics(successRate, throughput, avgWait, cpuUtilRecent);
+
+        // Agregar punto a gráfica cada 5 ticks (usar valor reciente)
+        if (globalTick % 5 == 0) {
+            window.addCpuUtilDataPoint(cpuUtilRecent);
+        }
     }
 
     private void updateMemoryBar() {

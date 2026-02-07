@@ -51,6 +51,13 @@ public class MainWindow extends JFrame {
     private PCBTableModel readySuspendedModel;
     private PCBTableModel blockedSuspendedModel;
 
+    // --- MÉTRICAS ---
+    private JLabel successRateLabel;
+    private JLabel throughputLabel;
+    private JLabel avgWaitLabel;
+    private JLabel cpuUtilLabel;
+    private CPUGraphPanel cpuGraphPanel;
+
     public MainWindow() {
         setTitle("UNIMET-Sat RTOS Simulator - Mission Control");
         setSize(1400, 900);
@@ -197,6 +204,32 @@ public class MainWindow extends JFrame {
 
     public void updateBlockedSuspendedTable(PCB[] snapshot, long globalTick) {
         blockedSuspendedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    // --- Métodos de métricas ---
+
+    /**
+     * Actualiza las métricas mostradas en el panel
+     * 
+     * @param successRate Tasa de éxito (0.0 - 1.0)
+     * @param throughput  Throughput (procesos/tick)
+     * @param avgWait     Tiempo de espera promedio (ticks)
+     * @param cpuUtil     Utilización de CPU (0.0 - 1.0)
+     */
+    public void updateMetrics(double successRate, double throughput, double avgWait, double cpuUtil) {
+        successRateLabel.setText(String.format("✅ Success: %.1f%%", successRate * 100));
+        throughputLabel.setText(String.format("📈 Thru: %.4f/t", throughput));
+        avgWaitLabel.setText(String.format("⏱ Wait: %.1f t", avgWait));
+        cpuUtilLabel.setText(String.format("🖥 CPU: %.1f%%", cpuUtil * 100));
+    }
+
+    /**
+     * Agrega un punto de datos a la gráfica de utilización de CPU
+     * 
+     * @param utilization Valor de utilización (0.0 - 1.0)
+     */
+    public void addCpuUtilDataPoint(double utilization) {
+        cpuGraphPanel.addDataPoint(utilization);
     }
 
     // --- Métodos de log ---
@@ -506,14 +539,53 @@ public class MainWindow extends JFrame {
     }
 
     private JPanel createFooter() {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 10, 10));
+        JPanel panel = new JPanel(new GridLayout(1, 3, 10, 10));
         panel.setBackground(COLOR_BG);
-        panel.setPreferredSize(new Dimension(0, 130));
+        panel.setPreferredSize(new Dimension(0, 150));
         panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
 
         panel.add(createQueuePanel("READY-SUSPENDED (Disk)", readySuspendedModel));
         panel.add(createQueuePanel("BLOCKED-SUSPENDED (Disk)", blockedSuspendedModel));
+        panel.add(createMetricsPanel());
         return panel;
+    }
+
+    private JPanel createMetricsPanel() {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBackground(COLOR_PANEL);
+        TitledBorder border = BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(new Color(0, 200, 150)), "MISSION METRICS");
+        border.setTitleColor(new Color(0, 200, 150));
+        panel.setBorder(border);
+
+        // Panel de labels (arriba)
+        JPanel labelsPanel = new JPanel(new GridLayout(2, 2, 5, 2));
+        labelsPanel.setBackground(COLOR_PANEL);
+
+        successRateLabel = createMetricLabel("✅ Success: --", new Color(100, 255, 100));
+        throughputLabel = createMetricLabel("📈 Thru: --", new Color(100, 200, 255));
+        avgWaitLabel = createMetricLabel("⏱ Wait: --", new Color(255, 200, 100));
+        cpuUtilLabel = createMetricLabel("🖥 CPU: --", new Color(200, 150, 255));
+
+        labelsPanel.add(successRateLabel);
+        labelsPanel.add(throughputLabel);
+        labelsPanel.add(avgWaitLabel);
+        labelsPanel.add(cpuUtilLabel);
+
+        // Gráfica de CPU (abajo)
+        cpuGraphPanel = new CPUGraphPanel(100);
+
+        panel.add(labelsPanel, BorderLayout.NORTH);
+        panel.add(cpuGraphPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JLabel createMetricLabel(String text, Color color) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Consolas", Font.BOLD, 11));
+        label.setForeground(color);
+        return label;
     }
 
     // Main para pruebas de visualización
