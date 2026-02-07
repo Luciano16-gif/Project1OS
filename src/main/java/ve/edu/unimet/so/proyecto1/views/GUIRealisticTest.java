@@ -177,55 +177,51 @@ public class GUIRealisticTest {
     }
 
     private void refreshGUI() {
-        SwingUtilities.invokeLater(() -> {
-            long globalTick = os.getGlobalTick();
+        OperatingSystem.GuiSnapshot snapshot = os.snapshotForGui();
+        long globalTick = snapshot.globalTick;
 
-            // Actualizar reloj
-            mainWindow.updateClock((int) globalTick);
+        // Actualizar reloj
+        mainWindow.updateClock((int) globalTick);
 
-            // Actualizar modo CPU (USER/KERNEL)
-            mainWindow.updateCpuMode(os.isInKernelMode());
+        // Actualizar modo CPU (USER/KERNEL)
+        mainWindow.updateCpuMode(snapshot.kernelMode);
 
-            // Actualizar CPU (proceso en ejecución) usando snapshot inmutable por fila
-            Object[] runningRow = os.snapshotRunningRow();
-            if (runningRow != null && runningRow.length >= 8) {
-                String processName = String.valueOf(runningRow[1]);
-                int programCounter = ((Number) runningRow[3]).intValue();
-                int remaining = ((Number) runningRow[6]).intValue();
-                int totalInstructions = Math.max(1, programCounter + remaining);
-                mainWindow.updateCPU(processName, programCounter, totalInstructions);
-            } else {
-                mainWindow.updateCPU(null, 0, 0);
-            }
+        // Actualizar CPU (proceso en ejecución) usando snapshot inmutable por fila
+        Object[] runningRow = snapshot.runningRow;
+        if (runningRow != null && runningRow.length >= 8) {
+            String processName = String.valueOf(runningRow[1]);
+            int programCounter = ((Number) runningRow[3]).intValue();
+            int remaining = ((Number) runningRow[6]).intValue();
+            int totalInstructions = Math.max(1, programCounter + remaining);
+            mainWindow.updateCPU(processName, programCounter, totalInstructions);
+        } else {
+            mainWindow.updateCPU(null, 0, 0);
+        }
 
-            // Actualizar detalles del proceso en ejecución
-            mainWindow.updateRunningDetailsRow(runningRow);
+        // Actualizar detalles del proceso en ejecución
+        mainWindow.updateRunningDetailsRow(runningRow);
 
-            // Actualizar tablas con snapshots por filas (sin exponer PCB mutable)
-            mainWindow.updateNewTableRows(os.snapshotNewRows());
-            mainWindow.updateReadyTableRows(os.snapshotReadyRows());
-            mainWindow.updateBlockedTableRows(os.snapshotBlockedRows());
-            mainWindow.updateTerminatedTableRows(os.snapshotTerminatedRows());
-            mainWindow.updateReadySuspendedTableRows(os.snapshotReadySuspendedRows());
-            mainWindow.updateBlockedSuspendedTableRows(os.snapshotBlockedSuspendedRows());
+        // Actualizar tablas con un snapshot atómico por tick
+        mainWindow.updateNewTableRows(snapshot.newRows);
+        mainWindow.updateReadyTableRows(snapshot.readyRows);
+        mainWindow.updateBlockedTableRows(snapshot.blockedRows);
+        mainWindow.updateTerminatedTableRows(snapshot.terminatedRows);
+        mainWindow.updateReadySuspendedTableRows(snapshot.readySuspendedRows);
+        mainWindow.updateBlockedSuspendedTableRows(snapshot.blockedSuspendedRows);
 
-            // Actualizar log de eventos
-            mainWindow.updateLog(os.snapshotEventLog());
+        // Actualizar log de eventos
+        mainWindow.updateLog(snapshot.eventLog);
 
-            // Actualizar memoria (porcentaje de uso)
-            updateMemoryBar();
+        // Actualizar memoria (porcentaje de uso)
+        updateMemoryBar(snapshot.residentProcessCount, snapshot.maxProcessesInMemory);
 
-            // Actualizar métricas
-            updateMetrics(globalTick);
-        });
+        // Actualizar métricas
+        updateMetrics(globalTick, snapshot.missionSuccessRate, snapshot.throughput,
+                snapshot.averageWaitingTime, snapshot.cpuUtilizationTotal);
     }
 
-    private void updateMetrics(long globalTick) {
-        double successRate = os.getMissionSuccessRate();
-        double throughput = os.getThroughput();
-        double avgWait = os.getAverageWaitingTime();
-        double cpuUtilTotal = os.getCpuUtilizationTotal();
-
+    private void updateMetrics(long globalTick, double successRate, double throughput,
+            double avgWait, double cpuUtilTotal) {
         mainWindow.updateMetrics(successRate, throughput, avgWait, cpuUtilTotal);
 
         // Agregar punto a gráfica cada 5 ticks
@@ -234,13 +230,11 @@ public class GUIRealisticTest {
         }
     }
 
-    private void updateMemoryBar() {
-        int total = os.getResidentProcessCount();
-        int maxMemory = os.getMaxProcessesInMemory();
+    private void updateMemoryBar(int residentProcessCount, int maxMemory) {
         if (maxMemory <= 0) {
             maxMemory = 1;
         }
-        int percentage = (total * 100) / maxMemory;
+        int percentage = (residentProcessCount * 100) / maxMemory;
         mainWindow.updateMemory(Math.min(percentage, 100));
     }
 

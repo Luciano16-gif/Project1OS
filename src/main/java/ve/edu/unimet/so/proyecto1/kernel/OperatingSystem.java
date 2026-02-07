@@ -46,6 +46,60 @@ public class OperatingSystem {
     private long terminatedBeforeDeadlineCount;
     private long totalTerminatedWaitingTicks;
 
+    public static final class GuiSnapshot {
+        public final long globalTick;
+        public final boolean kernelMode;
+        public final Object[] runningRow;
+        public final Object[][] newRows;
+        public final Object[][] readyRows;
+        public final Object[][] blockedRows;
+        public final Object[][] terminatedRows;
+        public final Object[][] readySuspendedRows;
+        public final Object[][] blockedSuspendedRows;
+        public final String[] eventLog;
+        public final int residentProcessCount;
+        public final int maxProcessesInMemory;
+        public final double missionSuccessRate;
+        public final double throughput;
+        public final double averageWaitingTime;
+        public final double cpuUtilizationTotal;
+
+        private GuiSnapshot(
+                long globalTick,
+                boolean kernelMode,
+                Object[] runningRow,
+                Object[][] newRows,
+                Object[][] readyRows,
+                Object[][] blockedRows,
+                Object[][] terminatedRows,
+                Object[][] readySuspendedRows,
+                Object[][] blockedSuspendedRows,
+                String[] eventLog,
+                int residentProcessCount,
+                int maxProcessesInMemory,
+                double missionSuccessRate,
+                double throughput,
+                double averageWaitingTime,
+                double cpuUtilizationTotal) {
+            this.globalTick = globalTick;
+            this.kernelMode = kernelMode;
+            this.runningRow = runningRow;
+            this.newRows = newRows;
+            this.readyRows = readyRows;
+            this.blockedRows = blockedRows;
+            this.terminatedRows = terminatedRows;
+            this.readySuspendedRows = readySuspendedRows;
+            this.blockedSuspendedRows = blockedSuspendedRows;
+            this.eventLog = eventLog;
+            this.residentProcessCount = residentProcessCount;
+            this.maxProcessesInMemory = maxProcessesInMemory;
+            this.missionSuccessRate = missionSuccessRate;
+            this.throughput = throughput;
+            this.averageWaitingTime = averageWaitingTime;
+            this.cpuUtilizationTotal = cpuUtilizationTotal;
+        }
+    }
+
     private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
         int comparison = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
         if (comparison != 0)
@@ -369,6 +423,14 @@ public class OperatingSystem {
         addProcess(p);
     }
 
+    boolean preemptRunningForAdmission() {
+        if (cpu == null || cpu.getState() != ProcessState.RUNNING) {
+            return false;
+        }
+        preemptCurrentProcess();
+        return true;
+    }
+
     void publishEvent(KernelEvent event) {
         eventQueue.enqueue(event);
     }
@@ -402,12 +464,62 @@ public class OperatingSystem {
     public String[] snapshotEventLog() {
         lockState();
         try {
-            Object[] arr = eventLog.toArray();
-            String[] out = new String[arr.length];
-        for (int i = 0; i < arr.length; i++) {
-            out[i] = (String) arr[i];
+            return eventLogToArrayInternal();
+        } finally {
+            unlockState();
         }
-        return out;
+    }
+
+    public GuiSnapshot snapshotForGui() {
+        lockState();
+        try {
+            Object[] runningRow = (cpu == null) ? null : pcbToRowInternal(cpu);
+            Object[][] newRows = toRowsInternal(snapshotQueue(newQueue));
+            Object[][] readyRows = isFifoAlgorithm()
+                    ? toRowsInternal(snapshotQueue(readyQueueFIFO))
+                    : toRowsInternal(toPcbArray(readyListSorted.toArray()));
+            Object[][] blockedRows = toRowsInternal(toPcbArray(blockedList.toArray()));
+            Object[][] terminatedRows = toRowsInternal(toPcbArray(terminatedList.toArray()));
+            Object[][] readySuspendedRows = toRowsInternal(memoryManager.snapshotReadySuspended());
+            Object[][] blockedSuspendedRows = toRowsInternal(memoryManager.snapshotBlockedSuspended());
+            String[] logSnapshot = eventLogToArrayInternal();
+
+            int readyCount = isFifoAlgorithm() ? readyQueueFIFO.size() : readyListSorted.size();
+            int blockedCount = blockedList.size();
+            int runningCount = (cpu == null) ? 0 : 1;
+            int residentCount = readyCount + blockedCount + runningCount;
+            int maxMemory = memoryManager.getMaxProcessesInMemory();
+
+            double successRate = (terminatedList.size() == 0)
+                    ? 0.0
+                    : (double) terminatedBeforeDeadlineCount / terminatedList.size();
+            double throughputValue = (globalTick <= 0)
+                    ? 0.0
+                    : (double) terminatedList.size() / globalTick;
+            double avgWaitValue = (terminatedList.size() == 0)
+                    ? 0.0
+                    : (double) totalTerminatedWaitingTicks / terminatedList.size();
+            double cpuUtilValue = (globalTick <= 0)
+                    ? 0.0
+                    : (double) (userBusyTicks + kernelBusyTicks) / globalTick;
+
+            return new GuiSnapshot(
+                    globalTick,
+                    isrTicksRemaining > 0,
+                    runningRow,
+                    newRows,
+                    readyRows,
+                    blockedRows,
+                    terminatedRows,
+                    readySuspendedRows,
+                    blockedSuspendedRows,
+                    logSnapshot,
+                    residentCount,
+                    maxMemory,
+                    successRate,
+                    throughputValue,
+                    avgWaitValue,
+                    cpuUtilValue);
         } finally {
             unlockState();
         }
@@ -888,6 +1000,15 @@ public class OperatingSystem {
                 p.getRemainingInstructions(),
                 remainingDeadline
         };
+    }
+
+    private String[] eventLogToArrayInternal() {
+        Object[] arr = eventLog.toArray();
+        String[] out = new String[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            out[i] = (String) arr[i];
+        }
+        return out;
     }
 
     private Object[][] toRowsInternal(PCB[] processes) {

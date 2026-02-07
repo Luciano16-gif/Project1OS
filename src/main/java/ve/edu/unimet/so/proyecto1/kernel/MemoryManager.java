@@ -55,7 +55,11 @@ public class MemoryManager {
           os.enqueueReady(p);
         } else {
           PCB victim = selectVictimFromSwapOut();
-          if (victim == null) return;
+          if (victim == null) {
+            if (!os.preemptRunningForAdmission()) return;
+            victim = selectVictimFromSwapOut();
+            if (victim == null) return;
+          }
           swapOut(victim);
           PCB p = os.getNewQueue().dequeue();
           os.enqueueReady(p);
