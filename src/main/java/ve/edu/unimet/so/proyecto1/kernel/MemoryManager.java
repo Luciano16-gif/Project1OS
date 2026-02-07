@@ -14,9 +14,11 @@ public class MemoryManager {
     private final OrderedList<PCB> blockedSuspended;
 
     private final Compare.Comparator<PCB> leastCriticalComparator = (a, b) -> {
-      int c = Long.compare(b.getDeadlineTick(), a.getDeadlineTick());
+      int c = Integer.compare(criticalityRank(a), criticalityRank(b));
       if (c != 0) return c;
-      c = Integer.compare(a.getPriority(), b.getPriority());
+      c = Long.compare(b.getVirtualDeadlineTick(), a.getVirtualDeadlineTick());
+      if (c != 0) return c;
+      c = Integer.compare(a.getEffectivePriority(), b.getEffectivePriority());
       if (c != 0) return c;
       c = Integer.compare(b.getRemainingInstructions(), a.getRemainingInstructions());
       if (c != 0) return c;
@@ -202,6 +204,32 @@ public class MemoryManager {
       return out;
     }
 
+    void refreshSuspendedOrder(PCB process) {
+      if (process == null) {
+        return;
+      }
+      if (process.getState() == ProcessState.READY_SUSPENDED) {
+        if (readySuspended.removeFirst(process)) {
+          readySuspended.add(process);
+        }
+      } else if (process.getState() == ProcessState.BLOCKED_SUSPENDED) {
+        if (blockedSuspended.removeFirst(process)) {
+          blockedSuspended.add(process);
+        }
+      }
+    }
 
+    private int criticalityRank(PCB process) {
+      if (process == null) {
+        return -1;
+      }
+      if (process.isEmergency()) {
+        return 2;
+      }
+      if (process.isRecoveryBoostApplied()) {
+        return 1;
+      }
+      return 0;
+    }
 
 }

@@ -16,9 +16,13 @@ public class PCB {
     private final int totalInstructions;
 
     // --- Planificación (RTOS) ---
-    private final int priority;
+    private final int basePriority;
+    private int effectivePriority;
     private final long arrivalTick;
     private final long deadlineTick; // Deadline absoluto
+    private long virtualDeadlineTick;
+    private final boolean emergency;
+    private boolean recoveryBoostApplied;
 
     // --- Entrada/Salida (I/O) ---
     private final int ioEveryTicks;      // 0 = nunca, N = cada N instrucciones ejecutadas
@@ -52,9 +56,13 @@ public class PCB {
         this.pid = pid;
         this.name = name;
         this.totalInstructions = totalInstructions;
-        this.priority = priority;
+        this.basePriority = priority;
+        this.effectivePriority = priority;
         this.arrivalTick = arrivalTick;
         this.deadlineTick = deadlineTick;
+        this.virtualDeadlineTick = deadlineTick;
+        this.emergency = priority == 99;
+        this.recoveryBoostApplied = false;
         this.ioEveryTicks = ioEveryTicks;
         this.ioServiceTicks = ioServiceTicks;
 
@@ -85,9 +93,14 @@ public class PCB {
         return Math.max(0, totalInstructions - programCounter);
     }
 
-    public int getPriority() { return priority; }
+    public int getPriority() { return effectivePriority; }
+    public int getBasePriority() { return basePriority; }
+    public int getEffectivePriority() { return effectivePriority; }
     public long getArrivalTick() { return arrivalTick; }
     public long getDeadlineTick() { return deadlineTick; }
+    public long getVirtualDeadlineTick() { return virtualDeadlineTick; }
+    public boolean isEmergency() { return emergency; }
+    public boolean isRecoveryBoostApplied() { return recoveryBoostApplied; }
 
     public int getIoEveryTicks() { return ioEveryTicks; }
     public int getIoTriggerCountdown() { return ioTriggerCountdown; }
@@ -139,6 +152,20 @@ public class PCB {
         this.deadlineMissed = true;
     }
 
+    public void applyDeadlineRecoveryBoost(int maxRecoveryPriority, long virtualDeadlineAdvanceTicks) {
+        if (recoveryBoostApplied) {
+            return;
+        }
+        recoveryBoostApplied = true;
+        if (!emergency && effectivePriority < maxRecoveryPriority) {
+            effectivePriority = maxRecoveryPriority;
+        }
+        if (virtualDeadlineAdvanceTicks > 0) {
+            long advanced = virtualDeadlineTick - virtualDeadlineAdvanceTicks;
+            virtualDeadlineTick = Math.max(arrivalTick, advanced);
+        }
+    }
+
     public boolean hasFinished() {
         return programCounter >= totalInstructions;
     }
@@ -162,7 +189,8 @@ public class PCB {
 
     @Override
     public String toString() {
-        return String.format("PCB{ID=%d, Name='%s', State=%s, PC=%d/%d, Prio=%d}", 
-                pid, name, state, programCounter, totalInstructions, priority);
+        return String.format("PCB{ID=%d, Name='%s', State=%s, PC=%d/%d, Prio=%d, BasePrio=%d, Rec=%s}",
+                pid, name, state, programCounter, totalInstructions, effectivePriority, basePriority,
+                recoveryBoostApplied ? "Y" : "N");
     }
 }

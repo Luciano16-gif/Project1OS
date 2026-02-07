@@ -13,6 +13,8 @@ import ve.edu.unimet.so.proyecto1.models.PCB;
 import ve.edu.unimet.so.proyecto1.models.ProcessState;
 
 public class OperatingSystem {
+    private static final int RECOVERY_PRIORITY_MAX = 90;
+    private static final long EDF_VIRTUAL_DEADLINE_ADVANCE_TICKS = 10;
 
     private volatile long globalTick;
     private int quantum;
@@ -43,6 +45,9 @@ public class OperatingSystem {
         int c = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
         if (c != 0)
             return c;
+        c = Integer.compare(recoveryRank(p2), recoveryRank(p1));
+        if (c != 0)
+            return c;
         c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
         if (c != 0)
             return c;
@@ -53,7 +58,10 @@ public class OperatingSystem {
     };
 
     private final Compare.Comparator<PCB> priorityComparator = (p1, p2) -> {
-        int c = Integer.compare(p2.getPriority(), p1.getPriority());
+        int c = Integer.compare(p2.getEffectivePriority(), p1.getEffectivePriority());
+        if (c != 0)
+            return c;
+        c = Integer.compare(recoveryRank(p2), recoveryRank(p1));
         if (c != 0)
             return c;
         c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
@@ -66,10 +74,13 @@ public class OperatingSystem {
     };
 
     private final Compare.Comparator<PCB> edfComparator = (p1, p2) -> {
-        int c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+        int c = Long.compare(p1.getVirtualDeadlineTick(), p2.getVirtualDeadlineTick());
         if (c != 0)
             return c;
-        c = Integer.compare(p2.getPriority(), p1.getPriority());
+        c = Integer.compare(recoveryRank(p2), recoveryRank(p1));
+        if (c != 0)
+            return c;
+        c = Integer.compare(p2.getEffectivePriority(), p1.getEffectivePriority());
         if (c != 0)
             return c;
         c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
@@ -287,8 +298,8 @@ public class OperatingSystem {
     private boolean shouldPreempt(PCB candidate, PCB running) {
         return switch (currentPolicy) {
             case SRT -> candidate.getRemainingInstructions() < running.getRemainingInstructions();
-            case PRIORITY -> candidate.getPriority() > running.getPriority();
-            case EDF -> candidate.getDeadlineTick() < running.getDeadlineTick();
+            case PRIORITY -> candidate.getEffectivePriority() > running.getEffectivePriority();
+            case EDF -> candidate.getVirtualDeadlineTick() < running.getVirtualDeadlineTick();
             default -> false;
         };
     }
@@ -581,7 +592,48 @@ public class OperatingSystem {
         if (globalTick > process.getDeadlineTick()) {
             process.markDeadlineMissed();
             logEvent("Fallo de Deadline en Proceso " + process.getPid());
+            applyDeadlineRecovery(process);
         }
+    }
+
+    private void applyDeadlineRecovery(PCB process) {
+        if (process == null || process.isRecoveryBoostApplied()) {
+            return;
+        }
+        if (process.isEmergency()) {
+            process.applyDeadlineRecoveryBoost(process.getEffectivePriority(), 0);
+            logEvent("Proceso de emergencia " + process.getPid() + " en estado CRITICAL_MISS");
+            return;
+        }
+        process.applyDeadlineRecoveryBoost(RECOVERY_PRIORITY_MAX, EDF_VIRTUAL_DEADLINE_ADVANCE_TICKS);
+        logEvent("Proceso " + process.getPid() + " promovido a recuperacion (prio " + process.getEffectivePriority()
+                + ", vDeadline " + process.getVirtualDeadlineTick() + ")");
+
+        refreshProcessOrdering(process);
+    }
+
+    private void refreshProcessOrdering(PCB process) {
+        if (process == null) {
+            return;
+        }
+        if (!isFifoAlgorithm() && process.getState() == ProcessState.READY) {
+            readyListSorted.removeFirst(process);
+            readyListSorted.add(process);
+        }
+        memoryManager.refreshSuspendedOrder(process);
+    }
+
+    private int recoveryRank(PCB process) {
+        if (process == null) {
+            return -1;
+        }
+        if (process.isEmergency()) {
+            return 2;
+        }
+        if (process.isRecoveryBoostApplied()) {
+            return 1;
+        }
+        return 0;
     }
 
     private PCB[] toPcbArray(Object[] arr) {
