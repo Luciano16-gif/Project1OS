@@ -28,18 +28,18 @@ public class MainWindow extends JFrame {
     private JProgressBar instructionBar;
     private JProgressBar memoryBar;
     private JTextArea logArea; // Panel de log de eventos
-    private EmergencyButton emergencyBtn;
+    private EmergencyButton emergencyButton;
 
     // --- BOTONES DE CONTROL ---
-    private JButton startBtn;
-    private JButton pauseBtn;
-    private JButton stepBtn;
-    private JButton gen1Btn;
-    private JButton generateBtn; // GEN 5
-    private JButton gen20Btn;
-    private JComboBox<String> algoCombo; // Dropdown de algoritmos
-    private JButton speedUpBtn;
-    private JButton speedDownBtn;
+    private JButton startButton;
+    private JButton pauseButton;
+    private JButton stepButton;
+    private JButton generateOneButton;
+    private JButton generateFiveButton; // GEN 5
+    private JButton generateTwentyButton;
+    private JComboBox<String> algorithmComboBox; // Dropdown de algoritmos
+    private JButton speedUpButton;
+    private JButton speedDownButton;
     private JTextField speedField; // Campo de velocidad del reloj
 
     // --- MODELOS DE TABLAS (AbstractTableModel) ---
@@ -254,7 +254,7 @@ public class MainWindow extends JFrame {
      * 
      * @param successRate Tasa de éxito (0.0 - 1.0)
      * @param throughput  Throughput (procesos/tick)
-     * @param avgWait     Tiempo de espera promedio (ticks)
+     * @param avgWait Tiempo de espera promedio (ticks)
      * @param cpuUtil     Utilización de CPU (0.0 - 1.0)
      */
     public void updateMetrics(double successRate, double throughput, double avgWait, double cpuUtil) {
@@ -330,43 +330,60 @@ public class MainWindow extends JFrame {
 
     // --- Getters para botones de control ---
     public EmergencyButton getEmergencyButton() {
-        return emergencyBtn;
+        return emergencyButton;
     }
 
     public JButton getStartButton() {
-        return startBtn;
+        return startButton;
     }
 
     public JButton getPauseButton() {
-        return pauseBtn;
+        return pauseButton;
     }
 
     public JButton getStepButton() {
-        return stepBtn;
+        return stepButton;
     }
 
+    public JButton getGenerateOneButton() {
+        return generateOneButton;
+    }
+
+    public JButton getGenerateFiveButton() {
+        return generateFiveButton;
+    }
+
+    public JButton getGenerateTwentyButton() {
+        return generateTwentyButton;
+    }
+
+    public JComboBox<String> getAlgorithmComboBox() {
+        return algorithmComboBox;
+    }
+
+    // Backward-compatible aliases for existing callers.
     public JButton getGen1Button() {
-        return gen1Btn;
+        return getGenerateOneButton();
     }
 
     public JButton getGenerateButton() {
-        return generateBtn;
+        return getGenerateFiveButton();
     }
 
     public JButton getGen20Button() {
-        return gen20Btn;
+        return getGenerateTwentyButton();
     }
 
     public JComboBox<String> getAlgoCombo() {
-        return algoCombo;
+        return getAlgorithmComboBox();
     }
 
     public JButton getSpeedUpButton() {
-        return speedUpBtn;
+        return speedUpButton;
     }
 
     public JButton getSpeedDownButton() {
-        return speedDownBtn;
+        return speedDownButton;
     }
 
     public JTextField getSpeedField() {
@@ -392,21 +409,21 @@ public class MainWindow extends JFrame {
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         controlPanel.setBackground(COLOR_PANEL);
 
-        startBtn = createControlButton("▶ START", new Color(0, 150, 0));
-        pauseBtn = createControlButton("⏸ PAUSE", new Color(200, 150, 0));
-        stepBtn = createControlButton("⏭ STEP", new Color(100, 149, 237));
-        gen1Btn = createControlButton("+1", new Color(100, 100, 180));
-        generateBtn = createControlButton("+5", new Color(150, 100, 200));
-        gen20Btn = createControlButton("+20", new Color(180, 80, 150));
+        startButton = createControlButton("▶ START", new Color(0, 150, 0));
+        pauseButton = createControlButton("⏸ PAUSE", new Color(200, 150, 0));
+        stepButton = createControlButton("⏭ STEP", new Color(100, 149, 237));
+        generateOneButton = createControlButton("+1", new Color(100, 100, 180));
+        generateFiveButton = createControlButton("+5", new Color(150, 100, 200));
+        generateTwentyButton = createControlButton("+20", new Color(180, 80, 150));
 
         // Dropdown de algoritmos
         String[] algorithms = { "FCFS", "RR", "SRT", "PRIORITY", "EDF" };
-        algoCombo = new JComboBox<>(algorithms);
-        algoCombo.setFont(new Font("Monospaced", Font.BOLD, 11));
-        algoCombo.setBackground(new Color(50, 50, 80));
-        algoCombo.setForeground(Color.ORANGE);
-        algoCombo.setToolTipText("Algoritmo de planificación");
-        speedDownBtn = createControlButton("⏪", new Color(80, 80, 120));
+        algorithmComboBox = new JComboBox<>(algorithms);
+        algorithmComboBox.setFont(new Font("Monospaced", Font.BOLD, 11));
+        algorithmComboBox.setBackground(new Color(50, 50, 80));
+        algorithmComboBox.setForeground(Color.ORANGE);
+        algorithmComboBox.setToolTipText("Algoritmo de planificación");
+        speedDownButton = createControlButton("⏪", new Color(80, 80, 120));
 
         // Campo de velocidad editable
         speedField = new JTextField("200", 4);
@@ -417,18 +434,18 @@ public class MainWindow extends JFrame {
         speedField.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 120)));
         speedField.setToolTipText("Velocidad en ms (10-2000)");
 
-        speedUpBtn = createControlButton("⏩", new Color(80, 80, 120));
+        speedUpButton = createControlButton("⏩", new Color(80, 80, 120));
 
-        controlPanel.add(startBtn);
-        controlPanel.add(pauseBtn);
-        controlPanel.add(stepBtn);
-        controlPanel.add(gen1Btn);
-        controlPanel.add(generateBtn);
-        controlPanel.add(gen20Btn);
-        controlPanel.add(algoCombo);
-        controlPanel.add(speedDownBtn);
+        controlPanel.add(startButton);
+        controlPanel.add(pauseButton);
+        controlPanel.add(stepButton);
+        controlPanel.add(generateOneButton);
+        controlPanel.add(generateFiveButton);
+        controlPanel.add(generateTwentyButton);
+        controlPanel.add(algorithmComboBox);
+        controlPanel.add(speedDownButton);
         controlPanel.add(speedField);
-        controlPanel.add(speedUpBtn);
+        controlPanel.add(speedUpButton);
 
         // Panel derecho con clock y modo CPU
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));
@@ -542,11 +559,11 @@ public class MainWindow extends JFrame {
         memoryBar.setStringPainted(true);
         memoryBar.setForeground(new Color(0, 200, 0));
 
-        emergencyBtn = new EmergencyButton();
-        emergencyBtn.setPreferredSize(new Dimension(250, 85)); // Tamaño decente
+        emergencyButton = new EmergencyButton();
+        emergencyButton.setPreferredSize(new Dimension(250, 85)); // Tamaño decente
         JPanel btnContainer = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 5));
         btnContainer.setBackground(COLOR_PANEL);
-        btnContainer.add(emergencyBtn);
+        btnContainer.add(emergencyButton);
 
         memPanel.add(memoryBar, BorderLayout.NORTH);
         memPanel.add(btnContainer, BorderLayout.CENTER);

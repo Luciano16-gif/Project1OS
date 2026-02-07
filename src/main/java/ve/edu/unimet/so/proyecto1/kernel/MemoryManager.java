@@ -13,22 +13,22 @@ public class MemoryManager {
     private final OrderedList<PCB> readySuspended;
     private final OrderedList<PCB> blockedSuspended;
 
-    private final Compare.Comparator<PCB> leastCriticalComparator = (a, b) -> {
-      int c = Integer.compare(criticalityRank(a), criticalityRank(b));
-      if (c != 0) return c;
-      c = Long.compare(b.getVirtualDeadlineTick(), a.getVirtualDeadlineTick());
-      if (c != 0) return c;
-      c = Integer.compare(a.getEffectivePriority(), b.getEffectivePriority());
-      if (c != 0) return c;
-      c = Integer.compare(b.getRemainingInstructions(), a.getRemainingInstructions());
-      if (c != 0) return c;
-      c = Long.compare(b.getArrivalTick(), a.getArrivalTick());
-      if (c != 0) return c;
-      return Integer.compare(b.getPid(), a.getPid());
+    private final Compare.Comparator<PCB> leastCriticalComparator = (left, right) -> {
+      int comparison = Integer.compare(criticalityRank(left), criticalityRank(right));
+      if (comparison != 0) return comparison;
+      comparison = Long.compare(right.getVirtualDeadlineTick(), left.getVirtualDeadlineTick());
+      if (comparison != 0) return comparison;
+      comparison = Integer.compare(left.getEffectivePriority(), right.getEffectivePriority());
+      if (comparison != 0) return comparison;
+      comparison = Integer.compare(right.getRemainingInstructions(), left.getRemainingInstructions());
+      if (comparison != 0) return comparison;
+      comparison = Long.compare(right.getArrivalTick(), left.getArrivalTick());
+      if (comparison != 0) return comparison;
+      return Integer.compare(right.getPid(), left.getPid());
     };
 
     private final Compare.Comparator<PCB> mostCriticalComparator =
-      (a, b) -> -leastCriticalComparator.compare(a, b);
+      (left, right) -> -leastCriticalComparator.compare(left, right);
 
     public MemoryManager(OperatingSystem os) {
       if (os == null) throw new IllegalArgumentException("os must not be null");

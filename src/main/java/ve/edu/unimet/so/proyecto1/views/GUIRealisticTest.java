@@ -18,7 +18,7 @@ public class GUIRealisticTest {
     // Componentes principales
     private final OperatingSystem os;
     private final ClockThread clock;
-    private final MainWindow window;
+    private final MainWindow mainWindow;
     private Timer refreshTimer;
 
     // Configuración
@@ -33,7 +33,7 @@ public class GUIRealisticTest {
         this.clock = new ClockThread(os, CYCLE_DURATION_MS);
 
         // 3. Crear la ventana
-        this.window = new MainWindow();
+        this.mainWindow = new MainWindow();
 
         // 4. Generar procesos iniciales
         generateInitialProcesses();
@@ -45,7 +45,7 @@ public class GUIRealisticTest {
         startGUIRefreshLoop();
 
         // Asegura liberar hilos al cerrar la ventana.
-        this.window.addWindowListener(new WindowAdapter() {
+        this.mainWindow.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 if (refreshTimer != null) {
@@ -70,28 +70,28 @@ public class GUIRealisticTest {
 
     private void setupControlButtons() {
         // Botón START
-        window.getStartButton().addActionListener(e -> {
+        mainWindow.getStartButton().addActionListener(e -> {
             startSimulation();
-            window.getStartButton().setEnabled(false);
-            window.getPauseButton().setEnabled(true);
-            window.getStepButton().setEnabled(false);
+            mainWindow.getStartButton().setEnabled(false);
+            mainWindow.getPauseButton().setEnabled(true);
+            mainWindow.getStepButton().setEnabled(false);
         });
 
         // Botón PAUSE
-        window.getPauseButton().addActionListener(e -> {
+        mainWindow.getPauseButton().addActionListener(e -> {
             pauseSimulation();
-            window.getStartButton().setEnabled(true);
-            window.getPauseButton().setEnabled(false);
-            window.getStepButton().setEnabled(true);
+            mainWindow.getStartButton().setEnabled(true);
+            mainWindow.getPauseButton().setEnabled(false);
+            mainWindow.getStepButton().setEnabled(true);
         });
 
         // Botón STEP (solo cuando está pausado)
-        window.getStepButton().addActionListener(e -> {
+        mainWindow.getStepButton().addActionListener(e -> {
             stepSimulation();
         });
 
         // Botón GENERATE 1 - genera 1 proceso aleatorio
-        window.getGen1Button().addActionListener(e -> {
+        mainWindow.getGenerateOneButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
             PCB p = ProcessGenerator.createRandomProcess(currentTick);
             os.submitNewProcess(p);
@@ -99,7 +99,7 @@ public class GUIRealisticTest {
         });
 
         // Botón GENERATE 5 - genera 5 procesos aleatorios
-        window.getGenerateButton().addActionListener(e -> {
+        mainWindow.getGenerateFiveButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
             PCB[] batch = ProcessGenerator.generateRandomBatch(5, currentTick);
             for (PCB p : batch) {
@@ -109,7 +109,7 @@ public class GUIRealisticTest {
         });
 
         // Botón GENERATE 20 - genera 20 procesos (fuerza swap)
-        window.getGen20Button().addActionListener(e -> {
+        mainWindow.getGenerateTwentyButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
             PCB[] batch = ProcessGenerator.generateRandomBatch(20, currentTick);
             for (PCB p : batch) {
@@ -119,27 +119,27 @@ public class GUIRealisticTest {
         });
 
         // Botón SPEED DOWN - más lento
-        window.getSpeedDownButton().addActionListener(e -> {
+        mainWindow.getSpeedDownButton().addActionListener(e -> {
             adjustSpeed(100); // +100ms
         });
 
         // Botón SPEED UP - más rápido
-        window.getSpeedUpButton().addActionListener(e -> {
+        mainWindow.getSpeedUpButton().addActionListener(e -> {
             adjustSpeed(-50); // -50ms
         });
 
         // Campo de velocidad - entrada manual
-        window.getSpeedField().addActionListener(e -> {
+        mainWindow.getSpeedField().addActionListener(e -> {
             try {
-                int newSpeed = Integer.parseInt(window.getSpeedField().getText().trim());
+                int newSpeed = Integer.parseInt(mainWindow.getSpeedField().getText().trim());
                 setSpeed(newSpeed);
             } catch (NumberFormatException ex) {
-                window.updateSpeedField(currentCycleDurationMs); // Restaurar valor válido
+                mainWindow.updateSpeedField(currentCycleDurationMs); // Restaurar valor válido
             }
         });
 
         // Botón de EMERGENCIA - genera interrupción + proceso
-        window.getEmergencyButton().addActionListener(e -> {
+        mainWindow.getEmergencyButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
 
             // 1. Generar interrupción (activa modo KERNEL)
@@ -154,14 +154,14 @@ public class GUIRealisticTest {
         });
 
         // ComboBox de ALGORITMO - selección directa
-        window.getAlgoCombo().addActionListener(e -> {
-            String selected = (String) window.getAlgoCombo().getSelectedItem();
+        mainWindow.getAlgorithmComboBox().addActionListener(e -> {
+            String selected = (String) mainWindow.getAlgorithmComboBox().getSelectedItem();
             setSchedulingAlgorithm(selected);
         });
 
         // Estado inicial de botones
-        window.getPauseButton().setEnabled(false);
-        window.getStepButton().setEnabled(false); // STEP solo cuando está pausado
+        mainWindow.getPauseButton().setEnabled(false);
+        mainWindow.getStepButton().setEnabled(false); // STEP solo cuando está pausado
     }
 
     private void setSchedulingAlgorithm(String name) {
@@ -181,10 +181,10 @@ public class GUIRealisticTest {
             long globalTick = os.getGlobalTick();
 
             // Actualizar reloj
-            window.updateClock((int) globalTick);
+            mainWindow.updateClock((int) globalTick);
 
             // Actualizar modo CPU (USER/KERNEL)
-            window.updateCpuMode(os.isInKernelMode());
+            mainWindow.updateCpuMode(os.isInKernelMode());
 
             // Actualizar CPU (proceso en ejecución) usando snapshot inmutable por fila
             Object[] runningRow = os.snapshotRunningRow();
@@ -193,24 +193,24 @@ public class GUIRealisticTest {
                 int programCounter = ((Number) runningRow[3]).intValue();
                 int remaining = ((Number) runningRow[6]).intValue();
                 int totalInstructions = Math.max(1, programCounter + remaining);
-                window.updateCPU(processName, programCounter, totalInstructions);
+                mainWindow.updateCPU(processName, programCounter, totalInstructions);
             } else {
-                window.updateCPU(null, 0, 0);
+                mainWindow.updateCPU(null, 0, 0);
             }
 
             // Actualizar detalles del proceso en ejecución
-            window.updateRunningDetailsRow(runningRow);
+            mainWindow.updateRunningDetailsRow(runningRow);
 
             // Actualizar tablas con snapshots por filas (sin exponer PCB mutable)
-            window.updateNewTableRows(os.snapshotNewRows());
-            window.updateReadyTableRows(os.snapshotReadyRows());
-            window.updateBlockedTableRows(os.snapshotBlockedRows());
-            window.updateTerminatedTableRows(os.snapshotTerminatedRows());
-            window.updateReadySuspendedTableRows(os.snapshotReadySuspendedRows());
-            window.updateBlockedSuspendedTableRows(os.snapshotBlockedSuspendedRows());
+            mainWindow.updateNewTableRows(os.snapshotNewRows());
+            mainWindow.updateReadyTableRows(os.snapshotReadyRows());
+            mainWindow.updateBlockedTableRows(os.snapshotBlockedRows());
+            mainWindow.updateTerminatedTableRows(os.snapshotTerminatedRows());
+            mainWindow.updateReadySuspendedTableRows(os.snapshotReadySuspendedRows());
+            mainWindow.updateBlockedSuspendedTableRows(os.snapshotBlockedSuspendedRows());
 
             // Actualizar log de eventos
-            window.updateLog(os.snapshotEventLog());
+            mainWindow.updateLog(os.snapshotEventLog());
 
             // Actualizar memoria (porcentaje de uso)
             updateMemoryBar();
@@ -226,11 +226,11 @@ public class GUIRealisticTest {
         double avgWait = os.getAverageWaitingTime();
         double cpuUtilTotal = os.getCpuUtilizationTotal();
 
-        window.updateMetrics(successRate, throughput, avgWait, cpuUtilTotal);
+        mainWindow.updateMetrics(successRate, throughput, avgWait, cpuUtilTotal);
 
         // Agregar punto a gráfica cada 5 ticks
         if (globalTick % 5 == 0) {
-            window.addCpuUtilDataPoint(cpuUtilTotal);
+            mainWindow.addCpuUtilDataPoint(cpuUtilTotal);
         }
     }
 
@@ -241,11 +241,11 @@ public class GUIRealisticTest {
             maxMemory = 1;
         }
         int percentage = (total * 100) / maxMemory;
-        window.updateMemory(Math.min(percentage, 100));
+        mainWindow.updateMemory(Math.min(percentage, 100));
     }
 
     public void show() {
-        window.setVisible(true);
+        mainWindow.setVisible(true);
     }
 
     public void startSimulation() {
@@ -279,7 +279,7 @@ public class GUIRealisticTest {
             currentCycleDurationMs = 2000;
 
         clock.setCycleDurationMs(currentCycleDurationMs);
-        window.updateSpeedField(currentCycleDurationMs);
+        mainWindow.updateSpeedField(currentCycleDurationMs);
         System.out.println("⏱ Velocidad ajustada: " + currentCycleDurationMs + "ms por ciclo");
     }
 
@@ -292,7 +292,7 @@ public class GUIRealisticTest {
 
         currentCycleDurationMs = speedMs;
         clock.setCycleDurationMs(currentCycleDurationMs);
-        window.updateSpeedField(currentCycleDurationMs);
+        mainWindow.updateSpeedField(currentCycleDurationMs);
         System.out.println("⏱ Velocidad establecida: " + currentCycleDurationMs + "ms por ciclo");
     }
 

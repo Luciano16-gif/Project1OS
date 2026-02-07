@@ -47,57 +47,57 @@ public class OperatingSystem {
     private long totalTerminatedWaitingTicks;
 
     private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
-        int c = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
-        if (c != 0)
-            return c;
-        c = Integer.compare(recoveryRank(p2), recoveryRank(p1));
-        if (c != 0)
-            return c;
-        c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
-        if (c != 0)
-            return c;
-        c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0)
-            return c;
+        int comparison = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
+        if (comparison != 0)
+            return comparison;
+        comparison = Integer.compare(recoveryRank(p2), recoveryRank(p1));
+        if (comparison != 0)
+            return comparison;
+        comparison = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+        if (comparison != 0)
+            return comparison;
+        comparison = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (comparison != 0)
+            return comparison;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
     private final Compare.Comparator<PCB> priorityComparator = (p1, p2) -> {
-        int c = Integer.compare(p2.getEffectivePriority(), p1.getEffectivePriority());
-        if (c != 0)
-            return c;
-        c = Integer.compare(recoveryRank(p2), recoveryRank(p1));
-        if (c != 0)
-            return c;
-        c = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
-        if (c != 0)
-            return c;
-        c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0)
-            return c;
+        int comparison = Integer.compare(p2.getEffectivePriority(), p1.getEffectivePriority());
+        if (comparison != 0)
+            return comparison;
+        comparison = Integer.compare(recoveryRank(p2), recoveryRank(p1));
+        if (comparison != 0)
+            return comparison;
+        comparison = Long.compare(p1.getDeadlineTick(), p2.getDeadlineTick());
+        if (comparison != 0)
+            return comparison;
+        comparison = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (comparison != 0)
+            return comparison;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
     private final Compare.Comparator<PCB> edfComparator = (p1, p2) -> {
-        int c = Long.compare(p1.getVirtualDeadlineTick(), p2.getVirtualDeadlineTick());
-        if (c != 0)
-            return c;
-        c = Integer.compare(recoveryRank(p2), recoveryRank(p1));
-        if (c != 0)
-            return c;
-        c = Integer.compare(p2.getEffectivePriority(), p1.getEffectivePriority());
-        if (c != 0)
-            return c;
-        c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0)
-            return c;
+        int comparison = Long.compare(p1.getVirtualDeadlineTick(), p2.getVirtualDeadlineTick());
+        if (comparison != 0)
+            return comparison;
+        comparison = Integer.compare(recoveryRank(p2), recoveryRank(p1));
+        if (comparison != 0)
+            return comparison;
+        comparison = Integer.compare(p2.getEffectivePriority(), p1.getEffectivePriority());
+        if (comparison != 0)
+            return comparison;
+        comparison = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (comparison != 0)
+            return comparison;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
     private final Compare.Comparator<PCB> fifoComparator = (p1, p2) -> {
-        int c = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
-        if (c != 0)
-            return c;
+        int comparison = Long.compare(p1.getArrivalTick(), p2.getArrivalTick());
+        if (comparison != 0)
+            return comparison;
         return Integer.compare(p1.getPid(), p2.getPid());
     };
 
