@@ -38,6 +38,9 @@ public class MemoryManager {
     }
 
     public void setMaxProcessesInMemory(int value) {
+      if (value <= 0) {
+        throw new IllegalArgumentException("maxProcessesInMemory must be > 0");
+      }
       this.maxProcessesInMemory = value;
     }
 
@@ -49,14 +52,12 @@ public class MemoryManager {
       while (!os.getNewQueue().isEmpty()) {
         if (getResidentCount() < maxProcessesInMemory) {
           PCB p = os.getNewQueue().dequeue();
-          p.setState(ProcessState.READY);
           os.enqueueReady(p);
         } else {
           PCB victim = selectVictimFromSwapOut();
           if (victim == null) return;
           swapOut(victim);
           PCB p = os.getNewQueue().dequeue();
-          p.setState(ProcessState.READY);
           os.enqueueReady(p);
         }
       }
@@ -66,7 +67,6 @@ public class MemoryManager {
       while (getResidentCount() < maxProcessesInMemory) {
         PCB p = readySuspended.pollFirst();
         if (p != null) {
-          p.setState(ProcessState.READY);
           os.enqueueReady(p);
           os.logEvent("Proceso " + p.getPid() + " reanudado desde READY_SUSPENDED");
           continue;
@@ -86,12 +86,12 @@ public class MemoryManager {
       if (process == null) return;
       if (process.getState() == ProcessState.BLOCKED) {
         removeFromBlocked(process);
-        process.setState(ProcessState.READY);
         os.enqueueReady(process);
         os.logEvent("I/O completada para " + process.getPid());
       } else if (process.getState() == ProcessState.BLOCKED_SUSPENDED) {
         blockedSuspended.removeFirst(process);
         process.setState(ProcessState.READY_SUSPENDED);
+        process.markWaitingStateEntryTick(os.getGlobalTickInternal());
         readySuspended.add(process);
         os.logEvent("I/O completada para " + process.getPid() + " (suspendido)");
       }
@@ -157,6 +157,7 @@ public class MemoryManager {
       if (victim.getState() == ProcessState.READY) {
         removeFromReady(victim);
         victim.setState(ProcessState.READY_SUSPENDED);
+        victim.markWaitingStateEntryTick(os.getGlobalTickInternal());
         readySuspended.add(victim);
         os.logEvent("Proceso " + victim.getPid() + " movido a READY_SUSPENDED");
       } else if (victim.getState() == ProcessState.BLOCKED) {
@@ -215,6 +216,23 @@ public class MemoryManager {
       } else if (process.getState() == ProcessState.BLOCKED_SUSPENDED) {
         if (blockedSuspended.removeFirst(process)) {
           blockedSuspended.add(process);
+        }
+      }
+    }
+
+    void tickBlockedSuspendedIo() {
+      for (int i = 0; i < blockedSuspended.size(); i++) {
+        PCB process = blockedSuspended.get(i);
+        if (process == null || process.getState() != ProcessState.BLOCKED_SUSPENDED) {
+          continue;
+        }
+        int remaining = process.getIoRemainingTicks();
+        if (remaining <= 0) {
+          continue;
+        }
+        process.decrementIoRemainingTicks();
+        if (process.getIoRemainingTicks() == 0) {
+          os.publishEvent(new KernelEvent(KernelEvent.Type.IO_COMPLETE, process));
         }
       }
     }

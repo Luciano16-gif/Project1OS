@@ -19,6 +19,7 @@ public class ClockThread extends Thread {
     private volatile boolean paused;
     private volatile int cycleDurationMs;
     private volatile boolean started;
+    private volatile boolean terminated;
 
     private final Semaphore ioTickSignal = new Semaphore(0);
     private final Semaphore irqTickSignal = new Semaphore(0);
@@ -41,6 +42,7 @@ public class ClockThread extends Thread {
         }
         this.os = os;
         this.cycleDurationMs = cycleDurationMs;
+        this.terminated = false;
         setName("ClockThread");
     }
 
@@ -57,6 +59,9 @@ public class ClockThread extends Thread {
     }
 
     public void startClock() {
+        if (terminated) {
+            throw new IllegalStateException("ClockThread was stopped and cannot be restarted. Create a new instance.");
+        }
         running = true;
         paused = false;
         startAuxThreads();
@@ -80,6 +85,9 @@ public class ClockThread extends Thread {
     }
 
     public void stopClock() {
+        if (!started) {
+            return;
+        }
         running = false;
         paused = false;
         if (ioDevice != null) {
@@ -92,6 +100,7 @@ public class ClockThread extends Thread {
             pauseLock.notifyAll();
         }
         waitAuxThreadsStop();
+        terminated = true;
     }
 
     public void stepOnce() {

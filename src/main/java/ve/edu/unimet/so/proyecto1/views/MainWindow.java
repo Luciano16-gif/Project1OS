@@ -165,12 +165,24 @@ public class MainWindow extends JFrame {
         newModel.updateFromSnapshot(snapshot, globalTick);
     }
 
+    public void updateNewTableRows(Object[][] rows) {
+        newModel.updateFromRows(rows);
+    }
+
     public void updateReadyTable(PCB[] snapshot, long globalTick) {
         readyModel.updateFromSnapshot(snapshot, globalTick);
     }
 
+    public void updateReadyTableRows(Object[][] rows) {
+        readyModel.updateFromRows(rows);
+    }
+
     public void updateRunningTable(PCB[] snapshot, long globalTick) {
         runningModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateRunningTableRows(Object[][] rows) {
+        runningModel.updateFromRows(rows);
     }
 
     /** Actualiza los detalles del proceso en ejecución (Prio, PC, MAR, Deadline) */
@@ -190,20 +202,49 @@ public class MainWindow extends JFrame {
         }
     }
 
+    public void updateRunningDetailsRow(Object[] runningRow) {
+        if (runningRow == null || runningRow.length < 8) {
+            cpuDetailsLabel.setText(" ");
+            return;
+        }
+        String details = String.format("Prio: %s  |  PC: %s  |  MAR: %s  |  Deadline restante: %s",
+                runningRow[5],
+                runningRow[3],
+                runningRow[4],
+                runningRow[7]);
+        cpuDetailsLabel.setText(details);
+    }
+
     public void updateBlockedTable(PCB[] snapshot, long globalTick) {
         blockedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateBlockedTableRows(Object[][] rows) {
+        blockedModel.updateFromRows(rows);
     }
 
     public void updateTerminatedTable(PCB[] snapshot, long globalTick) {
         terminatedModel.updateFromSnapshot(snapshot, globalTick);
     }
 
+    public void updateTerminatedTableRows(Object[][] rows) {
+        terminatedModel.updateFromRows(rows);
+    }
+
     public void updateReadySuspendedTable(PCB[] snapshot, long globalTick) {
         readySuspendedModel.updateFromSnapshot(snapshot, globalTick);
     }
 
+    public void updateReadySuspendedTableRows(Object[][] rows) {
+        readySuspendedModel.updateFromRows(rows);
+    }
+
     public void updateBlockedSuspendedTable(PCB[] snapshot, long globalTick) {
         blockedSuspendedModel.updateFromSnapshot(snapshot, globalTick);
+    }
+
+    public void updateBlockedSuspendedTableRows(Object[][] rows) {
+        blockedSuspendedModel.updateFromRows(rows);
     }
 
     // --- Métodos de métricas ---

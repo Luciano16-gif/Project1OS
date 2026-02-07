@@ -91,6 +91,34 @@ git push origin --delete nombre-rama
 - El kernel ya expone snapshots para colas y logs (`snapshotEventLog()`).
 - `ClockThread` debe ser el motor único (no usar `Thread.sleep` en GUI).
 
+## Bug fixes pendientes (rama `fix/general_bug_fixes`)
+Ir borrando (o marcar `[x]`) a medida que se cierre cada punto.
+
+### P1 (alta prioridad)
+- [x] **Métrica de CPU subcontada cuando el clock va mas rapido que el refresh de GUI.**  
+      Hoy el conteo de CPU busy depende del timer de GUI (100ms), no del tick real del kernel.  
+      Referencias: `src/main/java/ve/edu/unimet/so/proyecto1/views/GUIRealisticTest.java`
+- [x] **`waitingTime` nunca incrementa.**  
+      `avgWait` sale incorrecto porque no se actualiza el acumulador de espera en READY/READY_SUSPENDED.  
+      Referencias: `src/main/java/ve/edu/unimet/so/proyecto1/models/PCB.java`, `src/main/java/ve/edu/unimet/so/proyecto1/kernel/OperatingSystem.java`, `src/main/java/ve/edu/unimet/so/proyecto1/views/GUIRealisticTest.java`
+- [x] **Mutacion de PCB desde `IODeviceThread` fuera del lock central del kernel.**  
+      Riesgo de condiciones de carrera al decrementar `ioRemainingTicks` desde otro thread.  
+      Referencias: `src/main/java/ve/edu/unimet/so/proyecto1/kernel/IODeviceThread.java`
+
+### P2 (media prioridad)
+- [x] **`ClockThread` no reinicia limpio despues de `stopClock()`.**  
+      `started` queda en `true`; revisar semantica para permitir restart seguro o bloquearlo explicitamente.  
+      Referencia: `src/main/java/ve/edu/unimet/so/proyecto1/kernel/ClockThread.java`
+- [x] **Inconsistencia UX de `STEP` al inicio.**  
+      El boton aparece habilitado pero no hace nada hasta pausar.  
+      Referencias: `src/main/java/ve/edu/unimet/so/proyecto1/views/GUIRealisticTest.java`, `src/main/java/ve/edu/unimet/so/proyecto1/kernel/ClockThread.java`
+- [x] **Faltan validaciones duras en configuracion de kernel.**  
+      Validar rangos en `setQuantum(...)` y `setMaxProcessesInMemory(...)` para evitar valores invalidos.  
+      Referencias: `src/main/java/ve/edu/unimet/so/proyecto1/kernel/OperatingSystem.java`, `src/main/java/ve/edu/unimet/so/proyecto1/kernel/MemoryManager.java`
+- [x] **Snapshots exponen `PCB` mutable directamente a GUI.**  
+      Riesgo de lecturas inconsistentes de datos cuando cambian durante render.  
+      Referencias: `src/main/java/ve/edu/unimet/so/proyecto1/kernel/OperatingSystem.java`, `src/main/java/ve/edu/unimet/so/proyecto1/views/PCBTableModel.java`
+
 ## Nota de mantenimiento
 Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.
 

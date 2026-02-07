@@ -40,6 +40,11 @@ public class OperatingSystem {
     private final SimpleList<String> eventLog;
     private final Semaphore stateLock;
     private int maxLogEntries = 200;
+    private long userBusyTicks;
+    private long kernelBusyTicks;
+    private long idleTicks;
+    private long terminatedBeforeDeadlineCount;
+    private long totalTerminatedWaitingTicks;
 
     private final Compare.Comparator<PCB> srtComparator = (p1, p2) -> {
         int c = Integer.compare(p1.getRemainingInstructions(), p2.getRemainingInstructions());
@@ -97,6 +102,9 @@ public class OperatingSystem {
     };
 
     public OperatingSystem(int initialQuantum) {
+        if (initialQuantum <= 0) {
+            throw new IllegalArgumentException("initialQuantum must be > 0");
+        }
         this.globalTick = 0;
         this.quantum = initialQuantum;
         this.currentPolicy = SchedulingPolicy.FCFS;
@@ -117,12 +125,19 @@ public class OperatingSystem {
         this.memoryManager = new MemoryManager(this);
         this.eventQueue = new EventQueue();
         this.pendingInterrupts = new SimpleList<>();
+        this.userBusyTicks = 0;
+        this.kernelBusyTicks = 0;
+        this.idleTicks = 0;
+        this.terminatedBeforeDeadlineCount = 0;
+        this.totalTerminatedWaitingTicks = 0;
     }
 
     // --- Lógica Principal del Ciclo ---
 
     public void executeOneCycle() {
         lockState();
+        boolean userExecuted = false;
+        boolean kernelExecuted = false;
         try {
             globalTick++;
             detectDeadlineMisses();
@@ -133,6 +148,7 @@ public class OperatingSystem {
             memoryManager.admitFromNew();
             if (isrTicksRemaining > 0) {
                 isrTicksRemaining--;
+                kernelExecuted = true;
                 if (isrTicksRemaining == 0) {
                     long latency = (lastInterruptDetectedTick >= 0)
                             ? (globalTick - lastInterruptDetectedTick)
@@ -156,6 +172,7 @@ public class OperatingSystem {
             }
             if (cpu != null) {
                 cpu.executeCycle();
+                userExecuted = true;
                 cpuQuantumTicks++;
 
                 if (cpu.hasFinished()) {
@@ -173,6 +190,14 @@ public class OperatingSystem {
                 }
             }
         } finally {
+            incrementWaitingTimes();
+            if (kernelExecuted) {
+                kernelBusyTicks++;
+            } else if (userExecuted) {
+                userBusyTicks++;
+            } else {
+                idleTicks++;
+            }
             unlockState();
         }
     }
@@ -192,7 +217,6 @@ public class OperatingSystem {
             return;
 
         // Cambio de contexto: Running -> Ready
-        cpu.setState(ProcessState.READY);
         addProcess(cpu); // Devuelve a la cola correspondiente
         cpu = null;
         cpuQuantumTicks = 0;
@@ -215,7 +239,11 @@ public class OperatingSystem {
     }
 
     private void addProcess(PCB process) {
+        ProcessState previousState = process.getState();
         process.setState(ProcessState.READY);
+        if (previousState != ProcessState.READY && previousState != ProcessState.READY_SUSPENDED) {
+            process.markWaitingStateEntryTick(globalTick);
+        }
 
         if (isFifoAlgorithm()) {
             readyQueueFIFO.enqueue(process);
@@ -236,6 +264,10 @@ public class OperatingSystem {
         process.setState(ProcessState.TERMINATED);
         process.setFinishTick(globalTick);
         terminatedList.add(process);
+        totalTerminatedWaitingTicks += process.getWaitingTime();
+        if (process.getFinishTick() <= process.getDeadlineTick()) {
+            terminatedBeforeDeadlineCount++;
+        }
         if (cpu == process) {
             cpu = null;
             cpuQuantumTicks = 0;
@@ -278,7 +310,7 @@ public class OperatingSystem {
                 default -> srtComparator;
             };
             this.readyListSorted = new OrderedList<>(targetComparator);
-            tempBuffer.forEach(p -> addProcess(p));
+            tempBuffer.forEach(p -> readyListSorted.add(p));
         }
         } finally {
             unlockState();
@@ -323,6 +355,10 @@ public class OperatingSystem {
 
     PCB getCpuInternal() {
         return cpu;
+    }
+
+    long getGlobalTickInternal() {
+        return globalTick;
     }
 
     boolean isFifoAlgorithmInternal() {
@@ -372,6 +408,75 @@ public class OperatingSystem {
             out[i] = (String) arr[i];
         }
         return out;
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[][] snapshotNewRows() {
+        lockState();
+        try {
+            return toRowsInternal(snapshotQueue(newQueue));
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[][] snapshotReadyRows() {
+        lockState();
+        try {
+            if (isFifoAlgorithm()) {
+                return toRowsInternal(snapshotQueue(readyQueueFIFO));
+            }
+            return toRowsInternal(toPcbArray(readyListSorted.toArray()));
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[][] snapshotBlockedRows() {
+        lockState();
+        try {
+            return toRowsInternal(toPcbArray(blockedList.toArray()));
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[][] snapshotTerminatedRows() {
+        lockState();
+        try {
+            return toRowsInternal(toPcbArray(terminatedList.toArray()));
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[][] snapshotReadySuspendedRows() {
+        lockState();
+        try {
+            return toRowsInternal(memoryManager.snapshotReadySuspended());
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[][] snapshotBlockedSuspendedRows() {
+        lockState();
+        try {
+            return toRowsInternal(memoryManager.snapshotBlockedSuspended());
+        } finally {
+            unlockState();
+        }
+    }
+
+    public Object[] snapshotRunningRow() {
+        lockState();
+        try {
+            if (cpu == null) {
+                return null;
+            }
+            return pcbToRowInternal(cpu);
         } finally {
             unlockState();
         }
@@ -465,17 +570,7 @@ public class OperatingSystem {
         try {
             if (p == null)
                 return new Object[0];
-            long remainingDeadline = p.getDeadlineRemaining(globalTick);
-            return new Object[] {
-                    p.getPid(),
-                    p.getName(),
-                    p.getState().name(),
-                    p.getProgramCounter(),
-                    p.getMar(),
-                    p.getPriority(),
-                    p.getRemainingInstructions(),
-                    remainingDeadline
-            };
+            return pcbToRowInternal(p);
         } finally {
             unlockState();
         }
@@ -540,6 +635,16 @@ public class OperatingSystem {
         if (cpu == process) {
             cpu = null;
             cpuQuantumTicks = 0;
+        }
+    }
+
+    void onIoDeviceTick() {
+        lockState();
+        try {
+            tickIoForList(blockedList, ProcessState.BLOCKED);
+            memoryManager.tickBlockedSuspendedIo();
+        } finally {
+            unlockState();
         }
     }
 
@@ -662,12 +767,191 @@ public class OperatingSystem {
         }
     }
 
+    public void setMaxProcessesInMemory(int value) {
+        lockState();
+        try {
+            memoryManager.setMaxProcessesInMemory(value);
+            memoryManager.swapInIfSpace();
+        } finally {
+            unlockState();
+        }
+    }
+
+    public int getResidentProcessCount() {
+        lockState();
+        try {
+            int ready = isFifoAlgorithm() ? readyQueueFIFO.size() : readyListSorted.size();
+            int blocked = blockedList.size();
+            int runningCount = (cpu == null) ? 0 : 1;
+            return ready + blocked + runningCount;
+        } finally {
+            unlockState();
+        }
+    }
+
     public void setQuantum(int quantum) {
         lockState();
         try {
+            if (quantum <= 0) {
+                throw new IllegalArgumentException("quantum must be > 0");
+            }
             this.quantum = quantum;
         } finally {
             unlockState();
+        }
+    }
+
+    public long getUserBusyTicks() {
+        lockState();
+        try {
+            return userBusyTicks;
+        } finally {
+            unlockState();
+        }
+    }
+
+    public long getKernelBusyTicks() {
+        lockState();
+        try {
+            return kernelBusyTicks;
+        } finally {
+            unlockState();
+        }
+    }
+
+    public long getIdleTicks() {
+        lockState();
+        try {
+            return idleTicks;
+        } finally {
+            unlockState();
+        }
+    }
+
+    public double getMissionSuccessRate() {
+        lockState();
+        try {
+            if (terminatedList.size() == 0) {
+                return 0.0;
+            }
+            return (double) terminatedBeforeDeadlineCount / terminatedList.size();
+        } finally {
+            unlockState();
+        }
+    }
+
+    public double getThroughput() {
+        lockState();
+        try {
+            if (globalTick <= 0) {
+                return 0.0;
+            }
+            return (double) terminatedList.size() / globalTick;
+        } finally {
+            unlockState();
+        }
+    }
+
+    public double getAverageWaitingTime() {
+        lockState();
+        try {
+            if (terminatedList.size() == 0) {
+                return 0.0;
+            }
+            return (double) totalTerminatedWaitingTicks / terminatedList.size();
+        } finally {
+            unlockState();
+        }
+    }
+
+    public double getCpuUtilizationTotal() {
+        lockState();
+        try {
+            if (globalTick <= 0) {
+                return 0.0;
+            }
+            return (double) (userBusyTicks + kernelBusyTicks) / globalTick;
+        } finally {
+            unlockState();
+        }
+    }
+
+    private Object[] pcbToRowInternal(PCB p) {
+        long remainingDeadline = p.getDeadlineRemaining(globalTick);
+        return new Object[] {
+                p.getPid(),
+                p.getName(),
+                p.getState().name(),
+                p.getProgramCounter(),
+                p.getMar(),
+                p.getPriority(),
+                p.getRemainingInstructions(),
+                remainingDeadline
+        };
+    }
+
+    private Object[][] toRowsInternal(PCB[] processes) {
+        if (processes == null || processes.length == 0) {
+            return new Object[0][0];
+        }
+        Object[][] rows = new Object[processes.length][];
+        for (int i = 0; i < processes.length; i++) {
+            PCB process = processes[i];
+            rows[i] = (process == null) ? new Object[0] : pcbToRowInternal(process);
+        }
+        return rows;
+    }
+
+    private void tickIoForList(SimpleList<PCB> processes, ProcessState expectedState) {
+        for (int i = 0; i < processes.size(); i++) {
+            PCB process = processes.get(i);
+            if (process == null || process.getState() != expectedState) {
+                continue;
+            }
+            int remaining = process.getIoRemainingTicks();
+            if (remaining <= 0) {
+                continue;
+            }
+            process.decrementIoRemainingTicks();
+            if (process.getIoRemainingTicks() == 0) {
+                publishEvent(new KernelEvent(KernelEvent.Type.IO_COMPLETE, process));
+            }
+        }
+    }
+
+    private void incrementWaitingTimes() {
+        incrementWaitingTimesForReady();
+        incrementWaitingTimesForReadySuspended();
+    }
+
+    private void incrementWaitingTimesForReady() {
+        if (isFifoAlgorithm()) {
+            int size = readyQueueFIFO.size();
+            for (int i = 0; i < size; i++) {
+                PCB process = readyQueueFIFO.dequeue();
+                if (process != null) {
+                    if (process.getWaitingStateEntryTick() < globalTick) {
+                        process.incrementWaitingTime();
+                    }
+                    readyQueueFIFO.enqueue(process);
+                }
+            }
+            return;
+        }
+        for (int i = 0; i < readyListSorted.size(); i++) {
+            PCB process = readyListSorted.get(i);
+            if (process != null && process.getWaitingStateEntryTick() < globalTick) {
+                process.incrementWaitingTime();
+            }
+        }
+    }
+
+    private void incrementWaitingTimesForReadySuspended() {
+        PCB[] suspended = memoryManager.snapshotReadySuspended();
+        for (PCB process : suspended) {
+            if (process != null && process.getWaitingStateEntryTick() < globalTick) {
+                process.incrementWaitingTime();
+            }
         }
     }
 

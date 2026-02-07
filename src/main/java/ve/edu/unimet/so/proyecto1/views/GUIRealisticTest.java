@@ -6,6 +6,8 @@
 package ve.edu.unimet.so.proyecto1.views;
 
 import javax.swing.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import ve.edu.unimet.so.proyecto1.kernel.ClockThread;
 import ve.edu.unimet.so.proyecto1.kernel.OperatingSystem;
 import ve.edu.unimet.so.proyecto1.models.PCB;
@@ -17,6 +19,7 @@ public class GUIRealisticTest {
     private final OperatingSystem os;
     private final ClockThread clock;
     private final MainWindow window;
+    private Timer refreshTimer;
 
     // Configuración
     private static final int QUANTUM = 4;
@@ -40,6 +43,17 @@ public class GUIRealisticTest {
 
         // 6. Iniciar el loop de actualización de GUI
         startGUIRefreshLoop();
+
+        // Asegura liberar hilos al cerrar la ventana.
+        this.window.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                if (refreshTimer != null) {
+                    refreshTimer.stop();
+                }
+                clock.stopClock();
+            }
+        });
     }
 
     private void generateInitialProcesses() {
@@ -147,7 +161,7 @@ public class GUIRealisticTest {
 
         // Estado inicial de botones
         window.getPauseButton().setEnabled(false);
-        window.getStepButton().setEnabled(true); // Permitir step antes de iniciar
+        window.getStepButton().setEnabled(false); // STEP solo cuando está pausado
     }
 
     private void setSchedulingAlgorithm(String name) {
@@ -158,7 +172,7 @@ public class GUIRealisticTest {
 
     private void startGUIRefreshLoop() {
         // Timer de Swing para actualizar la GUI cada 100ms
-        Timer refreshTimer = new Timer(100, e -> refreshGUI());
+        refreshTimer = new Timer(100, e -> refreshGUI());
         refreshTimer.start();
     }
 
@@ -172,29 +186,28 @@ public class GUIRealisticTest {
             // Actualizar modo CPU (USER/KERNEL)
             window.updateCpuMode(os.isInKernelMode());
 
-            // Actualizar CPU (proceso en ejecución)
-            PCB[] running = os.snapshotRunning();
-            if (running.length > 0 && running[0] != null) {
-                PCB p = running[0];
-                window.updateCPU(
-                        p.getName(),
-                        p.getProgramCounter(),
-                        p.getTotalInstructions());
+            // Actualizar CPU (proceso en ejecución) usando snapshot inmutable por fila
+            Object[] runningRow = os.snapshotRunningRow();
+            if (runningRow != null && runningRow.length >= 8) {
+                String processName = String.valueOf(runningRow[1]);
+                int programCounter = ((Number) runningRow[3]).intValue();
+                int remaining = ((Number) runningRow[6]).intValue();
+                int totalInstructions = Math.max(1, programCounter + remaining);
+                window.updateCPU(processName, programCounter, totalInstructions);
             } else {
                 window.updateCPU(null, 0, 0);
             }
 
             // Actualizar detalles del proceso en ejecución
-            PCB runningProcess = (running.length > 0) ? running[0] : null;
-            window.updateRunningDetails(runningProcess, globalTick);
+            window.updateRunningDetailsRow(runningRow);
 
-            // Actualizar todas las tablas usando snapshots directos
-            window.updateNewTable(os.snapshotNew(), globalTick);
-            window.updateReadyTable(os.snapshotReady(), globalTick);
-            window.updateBlockedTable(os.snapshotBlocked(), globalTick);
-            window.updateTerminatedTable(os.snapshotTerminated(), globalTick);
-            window.updateReadySuspendedTable(os.snapshotReadySuspended(), globalTick);
-            window.updateBlockedSuspendedTable(os.snapshotBlockedSuspended(), globalTick);
+            // Actualizar tablas con snapshots por filas (sin exponer PCB mutable)
+            window.updateNewTableRows(os.snapshotNewRows());
+            window.updateReadyTableRows(os.snapshotReadyRows());
+            window.updateBlockedTableRows(os.snapshotBlockedRows());
+            window.updateTerminatedTableRows(os.snapshotTerminatedRows());
+            window.updateReadySuspendedTableRows(os.snapshotReadySuspendedRows());
+            window.updateBlockedSuspendedTableRows(os.snapshotBlockedSuspendedRows());
 
             // Actualizar log de eventos
             window.updateLog(os.snapshotEventLog());
@@ -203,88 +216,26 @@ public class GUIRealisticTest {
             updateMemoryBar();
 
             // Actualizar métricas
-            updateMetrics(globalTick, running);
+            updateMetrics(globalTick);
         });
     }
 
-    // --- Contadores para métricas ---
-    private long lastProcessedTick = -1;
-    private long cpuBusyTicks = 0; // Acumulativo total
+    private void updateMetrics(long globalTick) {
+        double successRate = os.getMissionSuccessRate();
+        double throughput = os.getThroughput();
+        double avgWait = os.getAverageWaitingTime();
+        double cpuUtilTotal = os.getCpuUtilizationTotal();
 
-    // Ventana deslizante para utilización reciente (últimos 50 ticks)
-    private static final int WINDOW_SIZE = 50;
-    private final boolean[] cpuWindow = new boolean[WINDOW_SIZE];
-    private int windowIndex = 0;
-    private int windowBusyCount = 0;
+        window.updateMetrics(successRate, throughput, avgWait, cpuUtilTotal);
 
-    private void updateMetrics(long globalTick, PCB[] running) {
-        boolean isBusy = running.length > 0 && running[0] != null;
-
-        // Solo contar una vez por tick (evitar doble conteo por refresh de GUI)
-        if (globalTick > lastProcessedTick) {
-            // Acumulativo total
-            if (isBusy) {
-                cpuBusyTicks++;
-            }
-
-            // Ventana deslizante: restar el valor antiguo, sumar el nuevo
-            if (cpuWindow[windowIndex]) {
-                windowBusyCount--;
-            }
-            cpuWindow[windowIndex] = isBusy;
-            if (isBusy) {
-                windowBusyCount++;
-            }
-            windowIndex = (windowIndex + 1) % WINDOW_SIZE;
-
-            lastProcessedTick = globalTick;
-        }
-
-        // Calcular métricas desde TERMINATED
-        PCB[] terminated = os.snapshotTerminated();
-        int terminatedCount = terminated.length;
-        int successCount = 0;
-        long totalWaitTicks = 0;
-
-        for (int i = 0; i < terminatedCount; i++) {
-            PCB p = terminated[i];
-            if (p != null) {
-                // Éxito = terminó antes o en el deadline
-                if (p.getFinishTick() <= p.getDeadlineTick()) {
-                    successCount++;
-                }
-                totalWaitTicks += p.getWaitingTime();
-            }
-        }
-
-        // Calcular valores
-        double successRate = (terminatedCount > 0) ? (double) successCount / terminatedCount : 0.0;
-        double throughput = (globalTick > 0) ? (double) terminatedCount / globalTick : 0.0;
-        double avgWait = (terminatedCount > 0) ? (double) totalWaitTicks / terminatedCount : 0.0;
-
-        // CPU: usar ventana deslizante para valor reciente
-        int windowFilled = (int) Math.min(globalTick, WINDOW_SIZE);
-        double cpuUtilRecent = (windowFilled > 0) ? (double) windowBusyCount / windowFilled : 0.0;
-
-        // CPU acumulativo para el label
-        double cpuUtilTotal = (globalTick > 0) ? (double) cpuBusyTicks / globalTick : 0.0;
-
-        // Actualizar panel de métricas (mostrar ambos: reciente y total)
-        window.updateMetrics(successRate, throughput, avgWait, cpuUtilRecent);
-
-        // Agregar punto a gráfica cada 5 ticks (usar valor reciente)
+        // Agregar punto a gráfica cada 5 ticks
         if (globalTick % 5 == 0) {
-            window.addCpuUtilDataPoint(cpuUtilRecent);
+            window.addCpuUtilDataPoint(cpuUtilTotal);
         }
     }
 
     private void updateMemoryBar() {
-        // Calcular uso de memoria basado en procesos residentes
-        int ready = os.snapshotReady().length;
-        int running = os.snapshotRunning().length;
-        int blocked = os.snapshotBlocked().length;
-        int total = ready + running + blocked;
-
+        int total = os.getResidentProcessCount();
         int maxMemory = os.getMaxProcessesInMemory();
         if (maxMemory <= 0) {
             maxMemory = 1;
