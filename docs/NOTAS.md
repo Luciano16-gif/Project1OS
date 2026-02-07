@@ -47,7 +47,13 @@ git push origin --delete nombre-rama
 ## Preguntas abiertas / Dudas
 - [x] **Rango de memoria:** Decidido por el equipo. Sugerencia inicial: `maxProcessesInMemory` configurable con default bajo (6–8) para forzar swapping.
 - [x] **Carga JSON/CSV:** Ya no es requisito. El sistema debe iniciar con procesos generados automáticamente.
-- [ ] **Deadline Miss:** Pendiente confirmar con la preparadora. Mientras tanto seguimos fail-soft (no se mata; solo se marca `deadlineMissed`).
+- [x] **Deadline Miss:** Definido como fail-soft con recuperacion (el proceso no se mata; se marca `deadlineMissed` y se aplica politica de recuperacion).
+
+## Decisiones cerradas (deadline/recovery)
+- La prioridad mostrada/operativa en runtime es la **prioridad efectiva** (`effectivePriority`).
+- La prioridad original de configuracion se mantiene como **prioridad base** (`basePriority`).
+- En recovery actual **no hay decaimiento** del boost (no se baja automaticamente despues).
+- El deadline se sigue evaluando desde `arrivalTick` (incluye espera en `NEW`).
 
 ## Estado actual del repo (al 2026-02-02)
 **Estructuras de Datos:**
