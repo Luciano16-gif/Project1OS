@@ -4,6 +4,7 @@
 package ve.edu.unimet.so.proyecto1.kernel;
 
 import java.util.concurrent.Semaphore;
+
 import ve.edu.unimet.so.proyecto1.datastructures.Compare;
 import ve.edu.unimet.so.proyecto1.datastructures.LinkedQueue;
 import ve.edu.unimet.so.proyecto1.datastructures.OrderedList;
@@ -113,8 +114,12 @@ public class OperatingSystem {
         lockState();
         try {
             globalTick++;
+            detectDeadlineMisses();
 
             processEvents();
+            // Keep NEW admission moving even while ISR is in progress.
+            // Otherwise NEW can starve for many ticks under interrupt bursts.
+            memoryManager.admitFromNew();
             if (isrTicksRemaining > 0) {
                 isrTicksRemaining--;
                 if (isrTicksRemaining == 0) {
@@ -129,7 +134,6 @@ public class OperatingSystem {
                 }
                 return;
             }
-            memoryManager.admitFromNew();
             if (cpu == null) {
                 scheduleNextProcess();
             } else if (isPreemptivePolicy()) {
@@ -351,9 +355,8 @@ public class OperatingSystem {
     public String[] snapshotEventLog() {
         lockState();
         try {
-        // TODO: expose to GUI log panel when UI wiring is ready.
-        Object[] arr = eventLog.toArray();
-        String[] out = new String[arr.length];
+            Object[] arr = eventLog.toArray();
+            String[] out = new String[arr.length];
         for (int i = 0; i < arr.length; i++) {
             out[i] = (String) arr[i];
         }
@@ -543,10 +546,65 @@ public class OperatingSystem {
         }
     }
 
+    private void detectDeadlineMisses() {
+        detectDeadlineMissesInArray(snapshotQueue(newQueue));
+        if (isFifoAlgorithm()) {
+            detectDeadlineMissesInArray(snapshotQueue(readyQueueFIFO));
+        } else {
+            detectDeadlineMissesInArray(toPcbArray(readyListSorted.toArray()));
+        }
+        detectDeadlineMissesInArray(toPcbArray(blockedList.toArray()));
+        detectDeadlineMissesInArray(memoryManager.snapshotReadySuspended());
+        detectDeadlineMissesInArray(memoryManager.snapshotBlockedSuspended());
+        detectDeadlineMiss(cpu);
+    }
+
+    private void detectDeadlineMissesInArray(PCB[] processes) {
+        if (processes == null) {
+            return;
+        }
+        for (PCB process : processes) {
+            detectDeadlineMiss(process);
+        }
+    }
+
+    private void detectDeadlineMiss(PCB process) {
+        if (process == null) {
+            return;
+        }
+        if (process.getState() == ProcessState.TERMINATED) {
+            return;
+        }
+        if (process.isDeadlineMissed()) {
+            return;
+        }
+        if (globalTick > process.getDeadlineTick()) {
+            process.markDeadlineMissed();
+            logEvent("Fallo de Deadline en Proceso " + process.getPid());
+        }
+    }
+
+    private PCB[] toPcbArray(Object[] arr) {
+        PCB[] out = new PCB[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            out[i] = (PCB) arr[i];
+        }
+        return out;
+    }
+
     public int getQuantum() {
         lockState();
         try {
             return quantum;
+        } finally {
+            unlockState();
+        }
+    }
+
+    public int getMaxProcessesInMemory() {
+        lockState();
+        try {
+            return memoryManager.getMaxProcessesInMemory();
         } finally {
             unlockState();
         }

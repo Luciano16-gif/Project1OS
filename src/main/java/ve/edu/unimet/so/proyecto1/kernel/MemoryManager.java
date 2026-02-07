@@ -66,12 +66,14 @@ public class MemoryManager {
         if (p != null) {
           p.setState(ProcessState.READY);
           os.enqueueReady(p);
+          os.logEvent("Proceso " + p.getPid() + " reanudado desde READY_SUSPENDED");
           continue;
         }
         p = blockedSuspended.pollFirst();
         if (p != null) {
           p.setState(ProcessState.BLOCKED);
           os.getBlockedList().add(p);
+          os.logEvent("Proceso " + p.getPid() + " reanudado desde BLOCKED_SUSPENDED");
           continue;
         }
         break;
@@ -154,10 +156,12 @@ public class MemoryManager {
         removeFromReady(victim);
         victim.setState(ProcessState.READY_SUSPENDED);
         readySuspended.add(victim);
+        os.logEvent("Proceso " + victim.getPid() + " movido a READY_SUSPENDED");
       } else if (victim.getState() == ProcessState.BLOCKED) {
         removeFromBlocked(victim);
         victim.setState(ProcessState.BLOCKED_SUSPENDED);
         blockedSuspended.add(victim);
+        os.logEvent("Proceso " + victim.getPid() + " movido a BLOCKED_SUSPENDED");
       }
     }
 

@@ -3,6 +3,8 @@
  */
 package ve.edu.unimet.so.proyecto1.kernel;
 
+import java.util.concurrent.Semaphore;
+
 public class ClockThread extends Thread {
 
     private static final int DEFAULT_CYCLE_MS = 100;
@@ -11,11 +13,17 @@ public class ClockThread extends Thread {
 
     private final OperatingSystem os;
     private final Object pauseLock = new Object();
+    private final Object tickLock = new Object();
 
     private volatile boolean running;
     private volatile boolean paused;
     private volatile int cycleDurationMs;
     private volatile boolean started;
+
+    private final Semaphore ioTickSignal = new Semaphore(0);
+    private final Semaphore irqTickSignal = new Semaphore(0);
+    private final Semaphore ioTickDone = new Semaphore(0);
+    private final Semaphore irqTickDone = new Semaphore(0);
 
     private IODeviceThread ioDevice;
     private InterruptGeneratorThread interruptGenerator;
@@ -43,8 +51,7 @@ public class ClockThread extends Thread {
             if (!running) break;
 
             long start = System.currentTimeMillis();
-            tickDevices();
-            os.executeOneCycle();
+            runOneTick();
             sleepRemaining(start);
         }
     }
@@ -75,15 +82,21 @@ public class ClockThread extends Thread {
     public void stopClock() {
         running = false;
         paused = false;
+        if (ioDevice != null) {
+            ioDevice.requestStop();
+        }
+        if (interruptGenerator != null) {
+            interruptGenerator.requestStop();
+        }
         synchronized (pauseLock) {
             pauseLock.notifyAll();
         }
+        waitAuxThreadsStop();
     }
 
     public void stepOnce() {
         if (!paused) return;
-        tickDevices();
-        os.executeOneCycle();
+        runOneTick();
     }
 
     public void setCycleDurationMs(int ms) {
@@ -119,20 +132,69 @@ public class ClockThread extends Thread {
     }
 
     private void startAuxThreads() {
-        if (ioDevice == null) {
-            ioDevice = new IODeviceThread(os);
+        if (ioDevice == null || !ioDevice.isAlive()) {
+            ioDevice = new IODeviceThread(os, ioTickSignal, ioTickDone);
+            ioDevice.start();
         }
-        if (interruptGenerator == null) {
-            interruptGenerator = new InterruptGeneratorThread(os, DEFAULT_IRQ_MIN_TICKS, DEFAULT_IRQ_MAX_TICKS);
+        if (interruptGenerator == null || !interruptGenerator.isAlive()) {
+            interruptGenerator = new InterruptGeneratorThread(
+                    os,
+                    DEFAULT_IRQ_MIN_TICKS,
+                    DEFAULT_IRQ_MAX_TICKS,
+                    irqTickSignal,
+                    irqTickDone);
+            interruptGenerator.start();
         }
     }
 
     private void tickDevices() {
+        ioTickDone.drainPermits();
+        irqTickDone.drainPermits();
         if (ioDevice != null) {
-            ioDevice.tickBlocked();
+            ioTickSignal.release();
         }
         if (interruptGenerator != null) {
-            interruptGenerator.tickMaybeGenerate(os.getGlobalTick());
+            irqTickSignal.release();
+        }
+        if (ioDevice != null) {
+            waitTickDone(ioTickDone);
+        }
+        if (interruptGenerator != null) {
+            waitTickDone(irqTickDone);
+        }
+    }
+
+    private void runOneTick() {
+        // Prevent concurrent tick handshakes between run loop and manual step.
+        synchronized (tickLock) {
+            tickDevices();
+            os.executeOneCycle();
+        }
+    }
+
+    private void waitTickDone(Semaphore doneSemaphore) {
+        try {
+            doneSemaphore.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void waitAuxThreadsStop() {
+        waitThreadStop(ioDevice);
+        waitThreadStop(interruptGenerator);
+        ioDevice = null;
+        interruptGenerator = null;
+    }
+
+    private void waitThreadStop(Thread thread) {
+        if (thread == null) {
+            return;
+        }
+        try {
+            thread.join(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

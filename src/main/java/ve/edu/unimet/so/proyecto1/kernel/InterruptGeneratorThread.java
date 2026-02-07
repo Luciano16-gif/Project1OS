@@ -4,10 +4,13 @@
 package ve.edu.unimet.so.proyecto1.kernel;
 
 import java.util.Random;
+import java.util.concurrent.Semaphore;
 
-public class InterruptGeneratorThread {
+public class InterruptGeneratorThread extends Thread {
 
     private final OperatingSystem os;
+    private final Semaphore tickSignal;
+    private final Semaphore tickDone;
     private final Random rng = new Random();
     private final String[] types = {
         "MICROMETEORITO",
@@ -17,21 +20,56 @@ public class InterruptGeneratorThread {
     private final int minTicks;
     private final int maxTicks;
     private int ticksUntilNext;
+    private volatile boolean running;
 
-    public InterruptGeneratorThread(OperatingSystem os, int minTicks, int maxTicks) {
+    public InterruptGeneratorThread(OperatingSystem os, int minTicks, int maxTicks, Semaphore tickSignal, Semaphore tickDone) {
         if (os == null) {
             throw new IllegalArgumentException("os must not be null");
         }
         if (minTicks < 1 || maxTicks < minTicks) {
             throw new IllegalArgumentException("invalid tick range");
         }
+        if (tickSignal == null || tickDone == null) {
+            throw new IllegalArgumentException("tick semaphores must not be null");
+        }
         this.os = os;
         this.minTicks = minTicks;
         this.maxTicks = maxTicks;
+        this.tickSignal = tickSignal;
+        this.tickDone = tickDone;
         this.ticksUntilNext = nextInterval();
+        this.running = true;
+        setName("InterruptGeneratorThread");
     }
 
-    public void tickMaybeGenerate(long currentTick) {
+    @Override
+    public void run() {
+        while (running) {
+            waitForTick();
+            if (!running) {
+                tickDone.release();
+                break;
+            }
+            tickMaybeGenerate(os.getGlobalTick());
+            tickDone.release();
+        }
+    }
+
+    public void requestStop() {
+        running = false;
+        tickSignal.release();
+    }
+
+    private void waitForTick() {
+        try {
+            tickSignal.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            running = false;
+        }
+    }
+
+    private void tickMaybeGenerate(long currentTick) {
         if (ticksUntilNext > 0) {
             ticksUntilNext--;
         }

@@ -211,8 +211,10 @@ public class GUIRealisticTest {
         int blocked = os.snapshotBlocked().length;
         int total = ready + running + blocked;
 
-        // Asumimos max 6 procesos en memoria (default de MemoryManager)
-        int maxMemory = 6;
+        int maxMemory = os.getMaxProcessesInMemory();
+        if (maxMemory <= 0) {
+            maxMemory = 1;
+        }
         int percentage = (total * 100) / maxMemory;
         window.updateMemory(Math.min(percentage, 100));
     }

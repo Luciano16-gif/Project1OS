@@ -30,6 +30,7 @@ public class PCB {
     private long startTick = -1;
     private long finishTick = -1;
     private long waitingTime = 0;
+    private boolean deadlineMissed = false;
 
     public PCB(int pid, String name, int totalInstructions, int priority, long arrivalTick, long deadlineTick, int ioEveryTicks, int ioServiceTicks) {
         if (name == null || name.isBlank()) {
@@ -96,6 +97,7 @@ public class PCB {
     public long getStartTick() { return startTick; }
     public long getFinishTick() { return finishTick; }
     public long getWaitingTime() { return waitingTime; }
+    public boolean isDeadlineMissed() { return deadlineMissed; }
 
     // --- Lógica de Simulación ---
 
@@ -131,6 +133,10 @@ public class PCB {
 
     public void setFinishTick(long tick) {
         this.finishTick = tick;
+    }
+
+    public void markDeadlineMissed() {
+        this.deadlineMissed = true;
     }
 
     public boolean hasFinished() {
