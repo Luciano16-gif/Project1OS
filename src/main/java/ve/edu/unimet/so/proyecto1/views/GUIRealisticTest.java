@@ -1,7 +1,7 @@
 /*
  * GUIRealisticTest.java
- * Prueba realista de la GUI conectada al kernel del simulador RTOS
- * Actualizado para usar los nuevos métodos de snapshot de MainWindow
+ * Coordinador principal de la aplicación GUI del simulador RTOS
+ * Refactorizado: usa SimulationController y GUIUpdater
  */
 package ve.edu.unimet.so.proyecto1.views;
 
@@ -13,65 +13,64 @@ import ve.edu.unimet.so.proyecto1.kernel.OperatingSystem;
 import ve.edu.unimet.so.proyecto1.models.PCB;
 import ve.edu.unimet.so.proyecto1.utils.ProcessGenerator;
 
+/**
+ * Coordinador principal que inicializa y conecta todos los componentes
+ */
 public class GUIRealisticTest {
 
-    // Componentes principales
+    // Componentes del sistema
     private final OperatingSystem os;
     private final ClockThread clock;
     private final MainWindow mainWindow;
-    private Timer refreshTimer;
+
+    // Subcomponentes refactorizados
+    private final SimulationController simulationController;
+    private final GUIUpdater guiUpdater;
 
     // Configuración
     private static final int QUANTUM = 4;
-    private static final int CYCLE_DURATION_MS = 200; // ms por ciclo (ajustable)
+    private static final int INITIAL_CYCLE_DURATION_MS = 200;
 
     public GUIRealisticTest() {
         // 1. Inicializar el kernel
         this.os = new OperatingSystem(QUANTUM);
 
-        // 2. Crear el ClockThread (motor único de la simulación)
-        this.clock = new ClockThread(os, CYCLE_DURATION_MS);
+        // 2. Crear el ClockThread (motor de la simulación)
+        this.clock = new ClockThread(os, INITIAL_CYCLE_DURATION_MS);
 
-        // 3. Crear la ventana
+        // 3. Crear la ventana principal
         this.mainWindow = new MainWindow();
 
-        // 4. Generar procesos iniciales
+        // 4. Crear controladores
+        this.simulationController = new SimulationController(os, clock, mainWindow, INITIAL_CYCLE_DURATION_MS);
+        this.guiUpdater = new GUIUpdater(os, mainWindow);
+
+        // 5. Generar procesos iniciales
         generateInitialProcesses();
 
-        // 5. Configurar botones de control y emergencia
+        // 6. Configurar botones de control
         setupControlButtons();
 
-        // 6. Iniciar el loop de actualización de GUI
-        startGUIRefreshLoop();
+        // 7. Iniciar el loop de actualización de GUI
+        guiUpdater.startRefreshLoop();
 
-        // Asegura liberar hilos al cerrar la ventana.
-        this.mainWindow.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                if (refreshTimer != null) {
-                    refreshTimer.stop();
-                }
-                clock.stopClock();
-            }
-        });
+        // 8. Manejar cierre de ventana
+        setupWindowClosing();
     }
 
     private void generateInitialProcesses() {
         ProcessGenerator.resetPidCounter();
-
-        // Generar un batch mixto de procesos
         PCB[] batch = ProcessGenerator.generateMixedBatch(0);
         for (PCB p : batch) {
             os.submitNewProcess(p);
         }
-
         System.out.println("Generados " + batch.length + " procesos iniciales");
     }
 
     private void setupControlButtons() {
         // Botón START
         mainWindow.getStartButton().addActionListener(e -> {
-            startSimulation();
+            simulationController.startSimulation();
             mainWindow.getStartButton().setEnabled(false);
             mainWindow.getPauseButton().setEnabled(true);
             mainWindow.getStepButton().setEnabled(false);
@@ -79,18 +78,18 @@ public class GUIRealisticTest {
 
         // Botón PAUSE
         mainWindow.getPauseButton().addActionListener(e -> {
-            pauseSimulation();
+            simulationController.pauseSimulation();
             mainWindow.getStartButton().setEnabled(true);
             mainWindow.getPauseButton().setEnabled(false);
             mainWindow.getStepButton().setEnabled(true);
         });
 
-        // Botón STEP (solo cuando está pausado)
+        // Botón STEP
         mainWindow.getStepButton().addActionListener(e -> {
-            stepSimulation();
+            simulationController.stepSimulation();
         });
 
-        // Botón GENERATE 1 - genera 1 proceso aleatorio
+        // Botón GENERATE 1
         mainWindow.getGenerateOneButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
             PCB p = ProcessGenerator.createRandomProcess(currentTick);
@@ -98,7 +97,7 @@ public class GUIRealisticTest {
             System.out.println("📦 Generado 1 proceso: " + p.getName());
         });
 
-        // Botón GENERATE 5 - genera 5 procesos aleatorios
+        // Botón GENERATE 5
         mainWindow.getGenerateFiveButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
             PCB[] batch = ProcessGenerator.generateRandomBatch(5, currentTick);
@@ -108,7 +107,7 @@ public class GUIRealisticTest {
             System.out.println("📦 Generados 5 procesos aleatorios");
         });
 
-        // Botón GENERATE 20 - genera 20 procesos (fuerza swap)
+        // Botón GENERATE 20
         mainWindow.getGenerateTwentyButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
             PCB[] batch = ProcessGenerator.generateRandomBatch(20, currentTick);
@@ -118,176 +117,59 @@ public class GUIRealisticTest {
             System.out.println("📦 Generados 20 procesos (memoria llena → swap!)");
         });
 
-        // Botón SPEED DOWN - más lento
+        // Botón SPEED DOWN
         mainWindow.getSpeedDownButton().addActionListener(e -> {
-            adjustSpeed(100); // +100ms
+            simulationController.adjustSpeed(100);
         });
 
-        // Botón SPEED UP - más rápido
+        // Botón SPEED UP
         mainWindow.getSpeedUpButton().addActionListener(e -> {
-            adjustSpeed(-50); // -50ms
+            simulationController.adjustSpeed(-50);
         });
 
-        // Campo de velocidad - entrada manual
+        // Campo de velocidad
         mainWindow.getSpeedField().addActionListener(e -> {
             try {
                 int newSpeed = Integer.parseInt(mainWindow.getSpeedField().getText().trim());
-                setSpeed(newSpeed);
+                simulationController.setSpeed(newSpeed);
             } catch (NumberFormatException ex) {
-                mainWindow.updateSpeedField(currentCycleDurationMs); // Restaurar valor válido
+                mainWindow.updateSpeedField(simulationController.getCurrentSpeed());
             }
         });
 
-        // Botón de EMERGENCIA - genera interrupción + proceso
+        // Botón de EMERGENCIA
         mainWindow.getEmergencyButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
-
-            // 1. Generar interrupción (activa modo KERNEL)
             os.submitInterrupt("MICROMETEORITO_MANUAL", 3);
-
-            // 2. Crear proceso de emergencia de alta prioridad
             PCB emergency = ProcessGenerator.createEmergencyProcess(currentTick);
             os.submitNewProcess(emergency);
-
             System.out.println(
                     "🚨 EMERGENCIA: Interrupción + Proceso " + emergency.getName() + " en tick " + currentTick);
         });
 
-        // ComboBox de ALGORITMO - selección directa
+        // ComboBox de ALGORITMO
         mainWindow.getAlgorithmComboBox().addActionListener(e -> {
             String selected = (String) mainWindow.getAlgorithmComboBox().getSelectedItem();
-            setSchedulingAlgorithm(selected);
+            simulationController.setSchedulingAlgorithm(selected);
         });
 
         // Estado inicial de botones
         mainWindow.getPauseButton().setEnabled(false);
-        mainWindow.getStepButton().setEnabled(false); // STEP solo cuando está pausado
+        mainWindow.getStepButton().setEnabled(false);
     }
 
-    private void setSchedulingAlgorithm(String name) {
-        var policy = ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy.valueOf(name);
-        os.setAlgorithm(policy);
-        System.out.println("🔄 Algoritmo cambiado a: " + name);
-    }
-
-    private void startGUIRefreshLoop() {
-        // Timer de Swing para actualizar la GUI cada 100ms
-        refreshTimer = new Timer(100, e -> refreshGUI());
-        refreshTimer.start();
-    }
-
-    private void refreshGUI() {
-        OperatingSystem.GuiSnapshot snapshot = os.snapshotForGui();
-        long globalTick = snapshot.globalTick;
-
-        // Actualizar reloj
-        mainWindow.updateClock((int) globalTick);
-
-        // Actualizar modo CPU (USER/KERNEL)
-        mainWindow.updateCpuMode(snapshot.kernelMode);
-
-        // Actualizar CPU (proceso en ejecución) usando snapshot inmutable por fila
-        Object[] runningRow = snapshot.runningRow;
-        if (runningRow != null && runningRow.length >= 8) {
-            String processName = String.valueOf(runningRow[1]);
-            int programCounter = ((Number) runningRow[3]).intValue();
-            int remaining = ((Number) runningRow[6]).intValue();
-            int totalInstructions = Math.max(1, programCounter + remaining);
-            mainWindow.updateCPU(processName, programCounter, totalInstructions);
-        } else {
-            mainWindow.updateCPU(null, 0, 0);
-        }
-
-        // Actualizar detalles del proceso en ejecución
-        mainWindow.updateRunningDetailsRow(runningRow);
-
-        // Actualizar tablas con un snapshot atómico por tick
-        mainWindow.updateNewTableRows(snapshot.newRows);
-        mainWindow.updateReadyTableRows(snapshot.readyRows);
-        mainWindow.updateBlockedTableRows(snapshot.blockedRows);
-        mainWindow.updateTerminatedTableRows(snapshot.terminatedRows);
-        mainWindow.updateReadySuspendedTableRows(snapshot.readySuspendedRows);
-        mainWindow.updateBlockedSuspendedTableRows(snapshot.blockedSuspendedRows);
-
-        // Actualizar log de eventos
-        mainWindow.updateLog(snapshot.eventLog);
-
-        // Actualizar memoria (porcentaje de uso)
-        updateMemoryBar(snapshot.residentProcessCount, snapshot.maxProcessesInMemory);
-
-        // Actualizar métricas
-        updateMetrics(globalTick, snapshot.missionSuccessRate, snapshot.throughput,
-                snapshot.averageWaitingTime, snapshot.cpuUtilizationTotal);
-    }
-
-    private void updateMetrics(long globalTick, double successRate, double throughput,
-            double avgWait, double cpuUtilTotal) {
-        mainWindow.updateMetrics(successRate, throughput, avgWait, cpuUtilTotal);
-
-        // Agregar punto a gráfica cada 5 ticks
-        if (globalTick % 5 == 0) {
-            mainWindow.addCpuUtilDataPoint(cpuUtilTotal);
-        }
-    }
-
-    private void updateMemoryBar(int residentProcessCount, int maxMemory) {
-        if (maxMemory <= 0) {
-            maxMemory = 1;
-        }
-        int percentage = (residentProcessCount * 100) / maxMemory;
-        mainWindow.updateMemory(Math.min(percentage, 100));
+    private void setupWindowClosing() {
+        mainWindow.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                guiUpdater.stopRefreshLoop();
+                simulationController.stopSimulation();
+            }
+        });
     }
 
     public void show() {
         mainWindow.setVisible(true);
-    }
-
-    public void startSimulation() {
-        clock.startClock();
-        System.out.println("Simulación iniciada - Quantum: " + QUANTUM + ", Ciclo: " + CYCLE_DURATION_MS + "ms");
-    }
-
-    public void pauseSimulation() {
-        clock.pauseClock();
-        System.out.println("Simulación pausada");
-    }
-
-    public void resumeSimulation() {
-        clock.resumeClock();
-        System.out.println("Simulación reanudada");
-    }
-
-    public void stepSimulation() {
-        clock.stepOnce();
-    }
-
-    // Velocidad actual del ciclo en ms
-    private int currentCycleDurationMs = CYCLE_DURATION_MS;
-
-    private void adjustSpeed(int deltaMs) {
-        currentCycleDurationMs += deltaMs;
-        // Limitar entre 10ms (muy rápido) y 2000ms (muy lento)
-        if (currentCycleDurationMs < 10)
-            currentCycleDurationMs = 10;
-        if (currentCycleDurationMs > 2000)
-            currentCycleDurationMs = 2000;
-
-        clock.setCycleDurationMs(currentCycleDurationMs);
-        mainWindow.updateSpeedField(currentCycleDurationMs);
-        System.out.println("⏱ Velocidad ajustada: " + currentCycleDurationMs + "ms por ciclo");
-    }
-
-    private void setSpeed(int speedMs) {
-        // Limitar entre 10ms (muy rápido) y 2000ms (muy lento)
-        if (speedMs < 10)
-            speedMs = 10;
-        if (speedMs > 2000)
-            speedMs = 2000;
-
-        currentCycleDurationMs = speedMs;
-        clock.setCycleDurationMs(currentCycleDurationMs);
-        mainWindow.updateSpeedField(currentCycleDurationMs);
-        System.out.println("⏱ Velocidad establecida: " + currentCycleDurationMs + "ms por ciclo");
     }
 
     // --- MAIN ---
@@ -298,7 +180,6 @@ public class GUIRealisticTest {
         SwingUtilities.invokeLater(() -> {
             GUIRealisticTest test = new GUIRealisticTest();
             test.show();
-            // La simulación ahora se controla con los botones en la GUI
         });
     }
 }
