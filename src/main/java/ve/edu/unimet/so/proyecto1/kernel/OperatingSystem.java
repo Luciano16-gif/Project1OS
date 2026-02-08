@@ -20,8 +20,10 @@ public class OperatingSystem {
     private int quantum;
     private SchedulingPolicy currentPolicy;
     private final MemoryManager memoryManager;
+    private final PeriodicTaskManager periodicTaskManager;
     private final EventQueue eventQueue;
     private int isrTicksRemaining;
+    private boolean kernelModeForGui;
     private long lastInterruptDetectedTick;
     private int lastIsrCostTicks;
     private String lastInterruptType;
@@ -45,6 +47,7 @@ public class OperatingSystem {
     private long idleTicks;
     private long terminatedBeforeDeadlineCount;
     private long totalTerminatedWaitingTicks;
+    private int nextKernelPid;
 
     public static final class GuiSnapshot {
         public final long globalTick;
@@ -165,6 +168,7 @@ public class OperatingSystem {
         this.cpu = null;
         this.cpuQuantumTicks = 0;
         this.isrTicksRemaining = 0;
+        this.kernelModeForGui = false;
         this.lastInterruptDetectedTick = -1;
         this.lastIsrCostTicks = 0;
         this.lastInterruptType = null;
@@ -177,6 +181,7 @@ public class OperatingSystem {
         this.eventLog = new SimpleList<>();
         this.stateLock = new Semaphore(1, true);
         this.memoryManager = new MemoryManager(this);
+        this.periodicTaskManager = new PeriodicTaskManager(this);
         this.eventQueue = new EventQueue();
         this.pendingInterrupts = new SimpleList<>();
         this.userBusyTicks = 0;
@@ -184,6 +189,7 @@ public class OperatingSystem {
         this.idleTicks = 0;
         this.terminatedBeforeDeadlineCount = 0;
         this.totalTerminatedWaitingTicks = 0;
+        this.nextKernelPid = 1_000_000;
     }
 
     // --- Lógica Principal del Ciclo ---
@@ -192,8 +198,10 @@ public class OperatingSystem {
         lockState();
         boolean userExecuted = false;
         boolean kernelExecuted = false;
+        boolean contextSwitchThisTick = false;
         try {
             globalTick++;
+            periodicTaskManager.releaseDueTasks(globalTick);
             detectDeadlineMisses();
 
             processEvents();
@@ -216,11 +224,12 @@ public class OperatingSystem {
                 return;
             }
             if (cpu == null) {
-                scheduleNextProcess();
+                contextSwitchThisTick = scheduleNextProcess();
             } else if (isPreemptivePolicy()) {
                 PCB bestReady = readyListSorted.peekFirst();
                 if (bestReady != null && shouldPreempt(bestReady, cpu)) {
                     preemptCurrentProcess();
+                    contextSwitchThisTick = true;
                     scheduleNextProcess();
                 }
             }
@@ -230,20 +239,24 @@ public class OperatingSystem {
                 cpuQuantumTicks++;
 
                 if (cpu.hasFinished()) {
+                    contextSwitchThisTick = true;
                     terminateProcess(cpu);
                     scheduleNextProcess();
                 } else if (cpu.shouldTriggerIO()) {
+                    contextSwitchThisTick = true;
                     publishEvent(new KernelEvent(KernelEvent.Type.IO_REQUEST, cpu));
                     processEvents();
                     scheduleNextProcess();
                 }
                 // Verificar Quantum (Solo RR)
                 else if (currentPolicy == SchedulingPolicy.RR && cpuQuantumTicks >= quantum) {
+                    contextSwitchThisTick = true;
                     preemptCurrentProcess();
                     scheduleNextProcess();
                 }
             }
         } finally {
+            kernelModeForGui = kernelExecuted || (contextSwitchThisTick && !userExecuted);
             incrementWaitingTimes();
             if (kernelExecuted) {
                 kernelBusyTicks++;
@@ -256,14 +269,16 @@ public class OperatingSystem {
         }
     }
 
-    private void scheduleNextProcess() {
+    private boolean scheduleNextProcess() {
         PCB next = getNextProcess();
         if (next != null) {
             cpu = next;
             cpu.setState(ProcessState.RUNNING);
             cpu.setStartTick(globalTick);
             cpuQuantumTicks = 0; // Reset quantum
+            return true;
         }
+        return false;
     }
 
     private void preemptCurrentProcess() {
@@ -284,12 +299,17 @@ public class OperatingSystem {
     public void submitNewProcess(PCB process) {
         lockState();
         try {
-        if (process == null)
-            return;
-        newQueue.enqueue(process);
+            enqueueNewInternal(process);
         } finally {
             unlockState();
         }
+    }
+
+    void enqueueNewInternal(PCB process) {
+        if (process == null) {
+            return;
+        }
+        newQueue.enqueue(process);
     }
 
     private void addProcess(PCB process) {
@@ -423,6 +443,10 @@ public class OperatingSystem {
         addProcess(p);
     }
 
+    int allocateKernelPid() {
+        return nextKernelPid++;
+    }
+
     boolean preemptRunningForAdmission() {
         if (cpu == null || cpu.getState() != ProcessState.RUNNING) {
             return false;
@@ -470,6 +494,94 @@ public class OperatingSystem {
         }
     }
 
+    public void registerPeriodicTask(
+            String baseName,
+            int totalInstructions,
+            int priority,
+            int periodTicks,
+            int relativeDeadlineTicks,
+            int ioEveryTicks,
+            int ioServiceTicks,
+            long firstReleaseTick) {
+        lockState();
+        try {
+            registerPeriodicTaskInternal(
+                    baseName,
+                    totalInstructions,
+                    priority,
+                    periodTicks,
+                    relativeDeadlineTicks,
+                    ioEveryTicks,
+                    ioServiceTicks,
+                    firstReleaseTick);
+        } finally {
+            unlockState();
+        }
+    }
+
+    public void registerPeriodicTask(
+            String baseName,
+            int totalInstructions,
+            int priority,
+            int periodTicks,
+            int relativeDeadlineTicks,
+            int ioEveryTicks,
+            int ioServiceTicks) {
+        lockState();
+        try {
+            registerPeriodicTaskInternal(
+                    baseName,
+                    totalInstructions,
+                    priority,
+                    periodTicks,
+                    relativeDeadlineTicks,
+                    ioEveryTicks,
+                    ioServiceTicks,
+                    globalTick);
+        } finally {
+            unlockState();
+        }
+    }
+
+    public void clearPeriodicTasks() {
+        lockState();
+        try {
+            periodicTaskManager.clearDefinitions();
+        } finally {
+            unlockState();
+        }
+    }
+
+    public int getPeriodicTaskCount() {
+        lockState();
+        try {
+            return periodicTaskManager.getDefinitionCount();
+        } finally {
+            unlockState();
+        }
+    }
+
+    private void registerPeriodicTaskInternal(
+            String baseName,
+            int totalInstructions,
+            int priority,
+            int periodTicks,
+            int relativeDeadlineTicks,
+            int ioEveryTicks,
+            int ioServiceTicks,
+            long firstReleaseTick) {
+        PeriodicTaskDefinition definition = new PeriodicTaskDefinition(
+                baseName,
+                totalInstructions,
+                priority,
+                periodTicks,
+                relativeDeadlineTicks,
+                ioEveryTicks,
+                ioServiceTicks,
+                firstReleaseTick);
+        periodicTaskManager.addDefinition(definition);
+    }
+
     public GuiSnapshot snapshotForGui() {
         lockState();
         try {
@@ -505,7 +617,7 @@ public class OperatingSystem {
 
             return new GuiSnapshot(
                     globalTick,
-                    isrTicksRemaining > 0,
+                    kernelModeForGui,
                     runningRow,
                     newRows,
                     readyRows,
@@ -691,7 +803,7 @@ public class OperatingSystem {
     public boolean isInKernelMode() {
         lockState();
         try {
-            return isrTicksRemaining > 0;
+            return kernelModeForGui;
         } finally {
             unlockState();
         }
@@ -739,10 +851,11 @@ public class OperatingSystem {
         if (process.getState() != ProcessState.RUNNING)
             return;
 
+        int ioServiceTicks = Math.max(1, process.getIoServiceTicks());
         process.setState(ProcessState.BLOCKED);
-        process.setIoRemainingTicks(process.getIoServiceTicks());
+        process.setIoRemainingTicks(ioServiceTicks);
         blockedList.add(process);
-        logEvent("Proceso " + process.getPid() + " bloqueado por I/O (" + process.getIoServiceTicks() + " ticks)");
+        logEvent("Proceso " + process.getPid() + " bloqueado por I/O (" + ioServiceTicks + " ticks)");
 
         if (cpu == process) {
             cpu = null;

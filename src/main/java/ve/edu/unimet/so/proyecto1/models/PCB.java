@@ -53,6 +53,9 @@ public class PCB {
         if (ioServiceTicks < 0) {
             throw new IllegalArgumentException("ioServiceTicks must be >= 0");
         }
+        if (ioEveryTicks > 0 && ioServiceTicks <= 0) {
+            throw new IllegalArgumentException("ioServiceTicks must be > 0 when ioEveryTicks > 0");
+        }
 
         this.pid = pid;
         this.name = name;

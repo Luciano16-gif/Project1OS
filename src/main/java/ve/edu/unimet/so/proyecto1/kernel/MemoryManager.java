@@ -56,9 +56,18 @@ public class MemoryManager {
         } else {
           PCB victim = selectVictimFromSwapOut();
           if (victim == null) {
-            if (!os.preemptRunningForAdmission()) return;
+            PCB incoming = os.getNewQueue().peek();
+            PCB running = os.getCpuInternal();
+            if (!shouldPreemptRunningForAdmission(incoming, running)) {
+              return;
+            }
+            if (!os.preemptRunningForAdmission()) {
+              return;
+            }
             victim = selectVictimFromSwapOut();
-            if (victim == null) return;
+            if (victim == null) {
+              return;
+            }
           }
           swapOut(victim);
           PCB p = os.getNewQueue().dequeue();
@@ -239,6 +248,35 @@ public class MemoryManager {
           os.publishEvent(new KernelEvent(KernelEvent.Type.IO_COMPLETE, process));
         }
       }
+    }
+
+    private boolean shouldPreemptRunningForAdmission(PCB incoming, PCB running) {
+      if (incoming == null || running == null) {
+        return false;
+      }
+      int incomingRank = criticalityRank(incoming);
+      int runningRank = criticalityRank(running);
+      if (incomingRank != runningRank) {
+        return incomingRank > runningRank;
+      }
+
+      int comparison = Long.compare(incoming.getVirtualDeadlineTick(), running.getVirtualDeadlineTick());
+      if (comparison != 0) {
+        return comparison < 0;
+      }
+
+      comparison = Integer.compare(incoming.getEffectivePriority(), running.getEffectivePriority());
+      if (comparison != 0) {
+        return comparison > 0;
+      }
+
+      comparison = Integer.compare(incoming.getRemainingInstructions(), running.getRemainingInstructions());
+      if (comparison != 0) {
+        return comparison < 0;
+      }
+
+      // Same urgency tier: allow admission to avoid NEW starvation when memory is tight.
+      return true;
     }
 
     private int criticalityRank(PCB process) {

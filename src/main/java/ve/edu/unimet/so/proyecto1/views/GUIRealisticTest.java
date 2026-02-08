@@ -47,13 +47,16 @@ public class GUIRealisticTest {
         // 5. Generar procesos iniciales
         generateInitialProcesses();
 
-        // 6. Configurar botones de control
+        // 6. Registrar tareas periodicas base
+        registerDefaultPeriodicTasks();
+
+        // 7. Configurar botones de control
         setupControlButtons();
 
-        // 7. Iniciar el loop de actualización de GUI
+        // 8. Iniciar el loop de actualización de GUI
         guiUpdater.startRefreshLoop();
 
-        // 8. Manejar cierre de ventana
+        // 9. Manejar cierre de ventana
         setupWindowClosing();
     }
 
@@ -64,6 +67,15 @@ public class GUIRealisticTest {
             os.submitNewProcess(p);
         }
         System.out.println("Generados " + batch.length + " procesos iniciales");
+    }
+
+    private void registerDefaultPeriodicTasks() {
+        // Configuracion conservadora para evitar sobrecarga continua del sistema.
+        os.registerPeriodicTask("P_Telemetry", 6, 65, 360, 360, 4, 2, 60);
+        os.registerPeriodicTask("P_HealthCheck", 5, 70, 480, 480, 0, 0, 120);
+        os.registerPeriodicTask("P_AttitudeCtrl", 7, 75, 320, 320, 0, 0, 180);
+        os.registerPeriodicTask("P_SensorSweep", 4, 60, 440, 440, 5, 2, 240);
+        System.out.println("Registradas " + os.getPeriodicTaskCount() + " tareas periodicas");
     }
 
     private void setupControlButtons() {

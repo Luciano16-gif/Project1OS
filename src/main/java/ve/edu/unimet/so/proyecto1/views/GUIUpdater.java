@@ -15,6 +15,7 @@ public class GUIUpdater {
     private final OperatingSystem os;
     private final MainWindow mainWindow;
     private Timer refreshTimer;
+    private long lastCpuGraphTick = -1;
 
     // Intervalo de refresh en ms
     private static final int REFRESH_INTERVAL_MS = 100;
@@ -92,9 +93,11 @@ public class GUIUpdater {
             double avgWait, double cpuUtilTotal) {
         mainWindow.updateMetrics(successRate, throughput, avgWait, cpuUtilTotal);
 
-        // Agregar punto a gráfica cada 5 ticks
-        if (globalTick % 5 == 0) {
+        // Agregar un unico punto por tick para evitar duplicados cuando el refresco GUI
+        // es mas rapido que el avance del reloj del kernel.
+        if (globalTick % 5 == 0 && globalTick != lastCpuGraphTick) {
             mainWindow.addCpuUtilDataPoint(cpuUtilTotal);
+            lastCpuGraphTick = globalTick;
         }
     }
 
