@@ -3,16 +3,21 @@
  */
 
 package ve.edu.unimet.so.proyecto1;
-import ve.edu.unimet.so.proyecto1.datastructures.DataStructuresTest;
+
+import javax.swing.SwingUtilities;
+import ve.edu.unimet.so.proyecto1.views.GUIRealisticTest;
 
 
 /**
  *
- * @author chano
+ * @author
  */
 public class Project1OS {
 
     public static void main(String[] args) {
-        DataStructuresTest.runAll();
+        SwingUtilities.invokeLater(() -> {
+            GUIRealisticTest app = new GUIRealisticTest();
+            app.show();
+        });
     }
 }

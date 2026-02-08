@@ -49,4 +49,3 @@ git push origin --delete nombre-rama
 
 ## Nota de mantenimiento
 Actualizar este archivo y ESPECIFICACION_PROYECTO.md al cerrar PRs importantes.
-

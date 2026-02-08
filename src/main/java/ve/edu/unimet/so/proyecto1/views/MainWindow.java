@@ -646,10 +646,6 @@ public class MainWindow extends JFrame {
         return label;
     }
 
-    // Main para pruebas de visualización
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new MainWindow().setVisible(true));
-    }
 }
 
 // --- CLASE EmergencyButton (sin cambios) ---

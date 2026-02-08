@@ -5,7 +5,6 @@
  */
 package ve.edu.unimet.so.proyecto1.views;
 
-import javax.swing.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import ve.edu.unimet.so.proyecto1.kernel.ClockThread;
@@ -170,16 +169,5 @@ public class GUIRealisticTest {
 
     public void show() {
         mainWindow.setVisible(true);
-    }
-
-    // --- MAIN ---
-    public static void main(String[] args) {
-        System.out.println("=== GUIRealisticTest - Prueba de GUI con Kernel Real ===");
-        System.out.println("Use los botones START/PAUSE/STEP para controlar la simulación\n");
-
-        SwingUtilities.invokeLater(() -> {
-            GUIRealisticTest test = new GUIRealisticTest();
-            test.show();
-        });
     }
 }
