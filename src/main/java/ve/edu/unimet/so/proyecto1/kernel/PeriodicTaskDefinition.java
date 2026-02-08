@@ -68,16 +68,28 @@ final class PeriodicTaskDefinition {
         return baseName;
     }
 
-    int getPeriodTicks() {
-        return periodTicks;
-    }
-
     long getNextReleaseTick() {
         return nextReleaseTick;
     }
 
     boolean isDue(long currentTick) {
         return currentTick >= nextReleaseTick;
+    }
+
+    long trimBacklogForTick(long currentTick, int maxDueReleasesToKeep) {
+        if (maxDueReleasesToKeep <= 0) {
+            throw new IllegalArgumentException("maxDueReleasesToKeep must be > 0");
+        }
+        if (!isDue(currentTick)) {
+            return 0;
+        }
+        long dueCount = ((currentTick - nextReleaseTick) / periodTicks) + 1;
+        if (dueCount <= maxDueReleasesToKeep) {
+            return 0;
+        }
+        long dropped = dueCount - maxDueReleasesToKeep;
+        nextReleaseTick += dropped * (long) periodTicks;
+        return dropped;
     }
 
     PCB createNextJob(int pid, long releaseTick) {
@@ -99,4 +111,3 @@ final class PeriodicTaskDefinition {
         nextReleaseTick += periodTicks;
     }
 }
-
