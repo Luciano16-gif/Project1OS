@@ -49,29 +49,27 @@ public class MemoryManager {
     }
 
     public void admitFromNew() {
+      int rotationsWithoutAdmission = 0;
       while (!os.getNewQueue().isEmpty()) {
-        if (getResidentCount() < maxProcessesInMemory) {
-          PCB p = os.getNewQueue().dequeue();
-          os.enqueueReady(p);
+        int queueSize = os.getNewQueue().size();
+        if (rotationsWithoutAdmission >= queueSize) {
+          // Full pass with no possible RAM admission in this tick.
+          // Keep NEW processes in NEW (suspended states are for swapped-out residents).
+          return;
+        }
+
+        PCB incoming = os.getNewQueue().peek();
+        if (incoming == null) {
+          return;
+        }
+
+        if (tryAdmitIncoming(incoming)) {
+          os.getNewQueue().dequeue();
+          os.enqueueReady(incoming);
+          rotationsWithoutAdmission = 0;
         } else {
-          PCB victim = selectVictimFromSwapOut();
-          if (victim == null) {
-            PCB incoming = os.getNewQueue().peek();
-            PCB running = os.getCpuInternal();
-            if (!shouldPreemptRunningForAdmission(incoming, running)) {
-              return;
-            }
-            if (!os.preemptRunningForAdmission()) {
-              return;
-            }
-            victim = selectVictimFromSwapOut();
-            if (victim == null) {
-              return;
-            }
-          }
-          swapOut(victim);
-          PCB p = os.getNewQueue().dequeue();
-          os.enqueueReady(p);
+          os.getNewQueue().enqueue(os.getNewQueue().dequeue());
+          rotationsWithoutAdmission++;
         }
       }
     }
@@ -277,6 +275,66 @@ public class MemoryManager {
 
       // Same urgency tier: allow admission to avoid NEW starvation when memory is tight.
       return true;
+    }
+
+    private boolean tryAdmitIncoming(PCB incoming) {
+      if (incoming == null) {
+        return false;
+      }
+
+      if (getResidentCount() < maxProcessesInMemory) {
+        return true;
+      }
+
+      PCB victim = selectVictimFromSwapOut();
+      if (victim != null) {
+        if (shouldSwapOutForIncoming(incoming, victim)) {
+          swapOut(victim);
+          return true;
+        }
+        // If current READY/BLOCKED victim is not swappable, try to free RAM via
+        // preemption first; this may expose RUNNING as the least-critical victim.
+        return tryPreemptAndSwap(incoming);
+      }
+
+      return tryPreemptAndSwap(incoming);
+    }
+
+    private boolean tryPreemptAndSwap(PCB incoming) {
+      PCB running = os.getCpuInternal();
+      if (!shouldPreemptRunningForAdmission(incoming, running)) {
+        return false;
+      }
+      if (!os.isFifoAlgorithmInternal() && !shouldSwapOutForIncoming(incoming, running)) {
+        return false;
+      }
+      if (!os.preemptRunningForAdmission()) {
+        return false;
+      }
+      PCB victim = running;
+      if (victim == null || (victim.getState() != ProcessState.READY && victim.getState() != ProcessState.BLOCKED)) {
+        victim = selectVictimFromSwapOut();
+      }
+      if (victim == null) {
+        return false;
+      }
+      if (!shouldSwapOutForIncoming(incoming, victim)) {
+        return false;
+      }
+      swapOut(victim);
+      return true;
+    }
+
+    private boolean shouldSwapOutForIncoming(PCB incoming, PCB victim) {
+      if (incoming == null || victim == null) {
+        return false;
+      }
+      if (os.isFifoAlgorithmInternal()) {
+        return true;
+      }
+      // Non-FIFO policies: only displace a resident process when incoming is strictly
+      // more critical according to the same policy-agnostic criticality ordering.
+      return leastCriticalComparator.compare(incoming, victim) > 0;
     }
 
     private int criticalityRank(PCB process) {

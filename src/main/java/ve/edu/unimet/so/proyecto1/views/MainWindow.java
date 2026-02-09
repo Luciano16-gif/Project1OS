@@ -329,7 +329,7 @@ public class MainWindow extends JFrame {
     }
 
     // --- Getters para botones de control ---
-    public EmergencyButton getEmergencyButton() {
+    public JButton getEmergencyButton() {
         return emergencyButton;
     }
 
