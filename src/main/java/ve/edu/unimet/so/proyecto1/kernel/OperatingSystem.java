@@ -439,6 +439,10 @@ public class OperatingSystem {
         return isFifoAlgorithm();
     }
 
+    SchedulingPolicy getCurrentPolicyInternal() {
+        return currentPolicy;
+    }
+
     void enqueueReady(PCB p) {
         addProcess(p);
     }

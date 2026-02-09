@@ -332,9 +332,18 @@ public class MemoryManager {
       if (os.isFifoAlgorithmInternal()) {
         return true;
       }
-      // Non-FIFO policies: only displace a resident process when incoming is strictly
-      // more critical according to the same policy-agnostic criticality ordering.
-      return leastCriticalComparator.compare(incoming, victim) > 0;
+      int rankComparison = Integer.compare(criticalityRank(incoming), criticalityRank(victim));
+      if (rankComparison != 0) {
+        return rankComparison > 0;
+      }
+
+      // Non-FIFO policies: use the policy primary metric only.
+      return switch (os.getCurrentPolicyInternal()) {
+        case SRT -> incoming.getRemainingInstructions() < victim.getRemainingInstructions();
+        case PRIORITY -> incoming.getEffectivePriority() > victim.getEffectivePriority();
+        case EDF -> incoming.getVirtualDeadlineTick() < victim.getVirtualDeadlineTick();
+        default -> false;
+      };
     }
 
     private int criticalityRank(PCB process) {
