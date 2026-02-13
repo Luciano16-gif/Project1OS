@@ -52,8 +52,8 @@ public class GUIUpdater {
         // Actualizar reloj
         mainWindow.updateClock((int) globalTick);
 
-        // Actualizar modo CPU (USER/KERNEL)
-        mainWindow.updateCpuMode(snapshot.kernelMode);
+        // Actualizar modo CPU (USER/KERNEL/USER-KERNEL/IDLE)
+        mainWindow.updateCpuMode(snapshot.cpuMode);
 
         // Actualizar CPU (proceso en ejecución) usando snapshot inmutable por fila
         Object[] runningRow = snapshot.runningRow;

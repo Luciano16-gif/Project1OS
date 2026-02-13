@@ -23,7 +23,7 @@ public class OperatingSystem {
     private final PeriodicTaskManager periodicTaskManager;
     private final EventQueue eventQueue;
     private int isrTicksRemaining;
-    private boolean kernelModeForGui;
+    private CpuMode cpuModeForGui;
     private long lastInterruptDetectedTick;
     private int lastIsrCostTicks;
     private String lastInterruptType;
@@ -49,9 +49,16 @@ public class OperatingSystem {
     private long totalTerminatedWaitingTicks;
     private int nextKernelPid;
 
+    public enum CpuMode {
+        USER,
+        KERNEL,
+        USER_KERNEL,
+        IDLE
+    }
+
     public static final class GuiSnapshot {
         public final long globalTick;
-        public final boolean kernelMode;
+        public final CpuMode cpuMode;
         public final Object[] runningRow;
         public final Object[][] newRows;
         public final Object[][] readyRows;
@@ -69,7 +76,7 @@ public class OperatingSystem {
 
         private GuiSnapshot(
                 long globalTick,
-                boolean kernelMode,
+                CpuMode cpuMode,
                 Object[] runningRow,
                 Object[][] newRows,
                 Object[][] readyRows,
@@ -85,7 +92,7 @@ public class OperatingSystem {
                 double averageWaitingTime,
                 double cpuUtilizationTotal) {
             this.globalTick = globalTick;
-            this.kernelMode = kernelMode;
+            this.cpuMode = cpuMode;
             this.runningRow = runningRow;
             this.newRows = newRows;
             this.readyRows = readyRows;
@@ -168,7 +175,7 @@ public class OperatingSystem {
         this.cpu = null;
         this.cpuQuantumTicks = 0;
         this.isrTicksRemaining = 0;
-        this.kernelModeForGui = false;
+        this.cpuModeForGui = CpuMode.IDLE;
         this.lastInterruptDetectedTick = -1;
         this.lastIsrCostTicks = 0;
         this.lastInterruptType = null;
@@ -256,7 +263,16 @@ public class OperatingSystem {
                 }
             }
         } finally {
-            kernelModeForGui = kernelExecuted || (contextSwitchThisTick && !userExecuted);
+            boolean kernelActivity = kernelExecuted || contextSwitchThisTick;
+            if (userExecuted && kernelActivity) {
+                cpuModeForGui = CpuMode.USER_KERNEL;
+            } else if (userExecuted) {
+                cpuModeForGui = CpuMode.USER;
+            } else if (kernelActivity) {
+                cpuModeForGui = CpuMode.KERNEL;
+            } else {
+                cpuModeForGui = CpuMode.IDLE;
+            }
             incrementWaitingTimes();
             if (kernelExecuted) {
                 kernelBusyTicks++;
@@ -621,7 +637,7 @@ public class OperatingSystem {
 
             return new GuiSnapshot(
                     globalTick,
-                    kernelModeForGui,
+                    cpuModeForGui,
                     runningRow,
                     newRows,
                     readyRows,
@@ -807,7 +823,7 @@ public class OperatingSystem {
     public boolean isInKernelMode() {
         lockState();
         try {
-            return kernelModeForGui;
+            return cpuModeForGui == CpuMode.KERNEL || cpuModeForGui == CpuMode.USER_KERNEL;
         } finally {
             unlockState();
         }

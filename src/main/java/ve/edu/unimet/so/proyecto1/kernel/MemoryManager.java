@@ -116,11 +116,35 @@ public class MemoryManager {
       return ready + blocked + (os.getCpuInternal() != null ? 1 : 0);
     }
 
-    private PCB selectVictimFromSwapOut() {
-      PCB victim = selectVictimFromReady();
-      if (victim != null) return victim;
-      return selectVictimFromBlocked();
+    private PCB selectVictimFromSwapOut(PCB incoming) {
+      PCB readyVictim = selectVictimFromReady();
+      PCB blockedVictim = selectVictimFromBlocked();
 
+      if (!os.isFifoAlgorithmInternal() && incoming != null) {
+        if (readyVictim != null && !shouldSwapOutForIncoming(incoming, readyVictim)) {
+          readyVictim = null;
+        }
+        if (blockedVictim != null && !shouldSwapOutForIncoming(incoming, blockedVictim)) {
+          blockedVictim = null;
+        }
+      }
+
+      if (readyVictim == null) {
+        return blockedVictim;
+      }
+      if (blockedVictim == null) {
+        return readyVictim;
+      }
+
+      int comparison = leastCriticalComparator.compare(readyVictim, blockedVictim);
+      if (comparison < 0) {
+        return readyVictim;
+      }
+      if (comparison > 0) {
+        return blockedVictim;
+      }
+      // Tie-break: prefer swapping blocked workloads so READY can keep forward progress.
+      return blockedVictim;
     }
 
     private PCB selectVictimFromReady() {
@@ -286,15 +310,10 @@ public class MemoryManager {
         return true;
       }
 
-      PCB victim = selectVictimFromSwapOut();
+      PCB victim = selectVictimFromSwapOut(incoming);
       if (victim != null) {
-        if (shouldSwapOutForIncoming(incoming, victim)) {
-          swapOut(victim);
-          return true;
-        }
-        // If current READY/BLOCKED victim is not swappable, try to free RAM via
-        // preemption first; this may expose RUNNING as the least-critical victim.
-        return tryPreemptAndSwap(incoming);
+        swapOut(victim);
+        return true;
       }
 
       return tryPreemptAndSwap(incoming);
@@ -313,7 +332,7 @@ public class MemoryManager {
       }
       PCB victim = running;
       if (victim == null || (victim.getState() != ProcessState.READY && victim.getState() != ProcessState.BLOCKED)) {
-        victim = selectVictimFromSwapOut();
+        victim = selectVictimFromSwapOut(incoming);
       }
       if (victim == null) {
         return false;

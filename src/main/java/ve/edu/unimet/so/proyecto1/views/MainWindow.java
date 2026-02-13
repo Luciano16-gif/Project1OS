@@ -5,6 +5,7 @@ import javax.swing.border.TitledBorder;
 import javax.swing.table.TableModel;
 import java.awt.*;
 import java.awt.geom.Point2D;
+import ve.edu.unimet.so.proyecto1.kernel.OperatingSystem;
 import ve.edu.unimet.so.proyecto1.models.PCB;
 
 /**
@@ -137,13 +138,29 @@ public class MainWindow extends JFrame {
         }
     }
 
-    public void updateCpuMode(boolean isKernelMode) {
-        if (isKernelMode) {
-            cpuModeLabel.setText("MODE: KERNEL");
-            cpuModeLabel.setForeground(Color.RED);
-        } else {
-            cpuModeLabel.setText("MODE: USER");
-            cpuModeLabel.setForeground(Color.GREEN);
+    public void updateCpuMode(OperatingSystem.CpuMode mode) {
+        if (mode == null) {
+            cpuModeLabel.setText("MODE: IDLE");
+            cpuModeLabel.setForeground(Color.LIGHT_GRAY);
+            return;
+        }
+        switch (mode) {
+            case USER -> {
+                cpuModeLabel.setText("MODE: USER");
+                cpuModeLabel.setForeground(Color.GREEN);
+            }
+            case KERNEL -> {
+                cpuModeLabel.setText("MODE: KERNEL");
+                cpuModeLabel.setForeground(Color.RED);
+            }
+            case USER_KERNEL -> {
+                cpuModeLabel.setText("MODE: USER/KERNEL");
+                cpuModeLabel.setForeground(Color.ORANGE);
+            }
+            case IDLE -> {
+                cpuModeLabel.setText("MODE: IDLE");
+                cpuModeLabel.setForeground(Color.LIGHT_GRAY);
+            }
         }
     }
 
@@ -451,8 +468,8 @@ public class MainWindow extends JFrame {
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));
         rightPanel.setBackground(COLOR_PANEL);
 
-        cpuModeLabel = new JLabel("MODE: USER");
-        cpuModeLabel.setForeground(Color.GREEN);
+        cpuModeLabel = new JLabel("MODE: IDLE");
+        cpuModeLabel.setForeground(Color.LIGHT_GRAY);
         cpuModeLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
 
         clockLabel = new JLabel("CYCLE: 0000  ");
