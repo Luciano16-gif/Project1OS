@@ -199,6 +199,62 @@ public class OperatingSystem {
         this.nextKernelPid = 1_000_000;
     }
 
+    // --- Reset completo del sistema ---
+
+    public void reset() {
+        lockState();
+        try {
+            // Reset tick global
+            globalTick = 0;
+
+            // Liberar CPU
+            cpu = null;
+            cpuQuantumTicks = 0;
+
+            // Limpiar todas las colas
+            newQueue.clear();
+            readyQueueFIFO.clear();
+            readyListSorted.clear();
+            blockedList.clear();
+            terminatedList.clear();
+
+            // Reset ISR
+            isrTicksRemaining = 0;
+            lastInterruptDetectedTick = -1;
+            lastIsrCostTicks = 0;
+            lastInterruptType = null;
+            pendingInterrupts.clear();
+
+            // Reset modo CPU
+            cpuModeForGui = CpuMode.IDLE;
+
+            // Reset contadores de métricas
+            userBusyTicks = 0;
+            kernelBusyTicks = 0;
+            idleTicks = 0;
+            terminatedBeforeDeadlineCount = 0;
+            totalTerminatedWaitingTicks = 0;
+
+            // Reset PID del kernel
+            nextKernelPid = 1_000_000;
+
+            // Limpiar event queue y log
+            eventQueue.clear();
+            eventLog.clear();
+
+            // Limpiar gestores
+            periodicTaskManager.clearDefinitions();
+            memoryManager.reset();
+
+            // Resetear algoritmo a FCFS
+            currentPolicy = SchedulingPolicy.FCFS;
+
+            logEvent("Sistema reiniciado");
+        } finally {
+            unlockState();
+        }
+    }
+
     // --- Lógica Principal del Ciclo ---
 
     public void executeOneCycle() {
@@ -368,40 +424,40 @@ public class OperatingSystem {
     public void setAlgorithm(SchedulingPolicy newPolicy) {
         lockState();
         try {
-        if (newPolicy == null) {
-            throw new IllegalArgumentException("policy must not be null");
-        }
-        if (this.currentPolicy == newPolicy)
-            return;
-
-        this.currentPolicy = newPolicy;
-
-        SimpleList<PCB> tempBuffer = new SimpleList<>();
-
-        while (!readyQueueFIFO.isEmpty()) {
-            tempBuffer.add(readyQueueFIFO.dequeue());
-        }
-
-        while (!readyListSorted.isEmpty()) {
-            tempBuffer.add(readyListSorted.pollFirst());
-        }
-
-        if (newPolicy == SchedulingPolicy.FCFS || newPolicy == SchedulingPolicy.RR) {
-            this.readyListSorted = new OrderedList<>(srtComparator);
-            OrderedList<PCB> fifoOrdered = new OrderedList<>(fifoComparator);
-            tempBuffer.forEach(fifoOrdered::add);
-            while (!fifoOrdered.isEmpty()) {
-                readyQueueFIFO.enqueue(fifoOrdered.pollFirst());
+            if (newPolicy == null) {
+                throw new IllegalArgumentException("policy must not be null");
             }
-        } else {
-            Compare.Comparator<PCB> targetComparator = switch (newPolicy) {
-                case PRIORITY -> priorityComparator;
-                case EDF -> edfComparator;
-                default -> srtComparator;
-            };
-            this.readyListSorted = new OrderedList<>(targetComparator);
-            tempBuffer.forEach(p -> readyListSorted.add(p));
-        }
+            if (this.currentPolicy == newPolicy)
+                return;
+
+            this.currentPolicy = newPolicy;
+
+            SimpleList<PCB> tempBuffer = new SimpleList<>();
+
+            while (!readyQueueFIFO.isEmpty()) {
+                tempBuffer.add(readyQueueFIFO.dequeue());
+            }
+
+            while (!readyListSorted.isEmpty()) {
+                tempBuffer.add(readyListSorted.pollFirst());
+            }
+
+            if (newPolicy == SchedulingPolicy.FCFS || newPolicy == SchedulingPolicy.RR) {
+                this.readyListSorted = new OrderedList<>(srtComparator);
+                OrderedList<PCB> fifoOrdered = new OrderedList<>(fifoComparator);
+                tempBuffer.forEach(fifoOrdered::add);
+                while (!fifoOrdered.isEmpty()) {
+                    readyQueueFIFO.enqueue(fifoOrdered.pollFirst());
+                }
+            } else {
+                Compare.Comparator<PCB> targetComparator = switch (newPolicy) {
+                    case PRIORITY -> priorityComparator;
+                    case EDF -> edfComparator;
+                    default -> srtComparator;
+                };
+                this.readyListSorted = new OrderedList<>(targetComparator);
+                tempBuffer.forEach(p -> readyListSorted.add(p));
+            }
         } finally {
             unlockState();
         }
@@ -485,12 +541,12 @@ public class OperatingSystem {
     public void submitInterrupt(String interruptType, int costTicks) {
         lockState();
         try {
-        if (interruptType == null || interruptType.isBlank())
-            return;
-        if (costTicks <= 0)
-            costTicks = 1;
-        KernelEvent event = new KernelEvent(interruptType, globalTick, costTicks);
-        eventQueue.enqueue(event);
+            if (interruptType == null || interruptType.isBlank())
+                return;
+            if (costTicks <= 0)
+                costTicks = 1;
+            KernelEvent event = new KernelEvent(interruptType, globalTick, costTicks);
+            eventQueue.enqueue(event);
         } finally {
             unlockState();
         }

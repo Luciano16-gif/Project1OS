@@ -35,6 +35,7 @@ public class MainWindow extends JFrame {
     private JButton startButton;
     private JButton pauseButton;
     private JButton stepButton;
+    private JButton resetButton;
     private JButton generateOneButton;
     private JButton generateFiveButton; // GEN 5
     private JButton generateTwentyButton;
@@ -271,7 +272,7 @@ public class MainWindow extends JFrame {
      * 
      * @param successRate Tasa de éxito (0.0 - 1.0)
      * @param throughput  Throughput (procesos/tick)
-     * @param avgWait Tiempo de espera promedio (ticks)
+     * @param avgWait     Tiempo de espera promedio (ticks)
      * @param cpuUtil     Utilización de CPU (0.0 - 1.0)
      */
     public void updateMetrics(double successRate, double throughput, double avgWait, double cpuUtil) {
@@ -411,6 +412,14 @@ public class MainWindow extends JFrame {
         speedField.setText(String.valueOf(speedMs));
     }
 
+    public JButton getResetButton() {
+        return resetButton;
+    }
+
+    public void clearCpuGraph() {
+        cpuGraphPanel.clear();
+    }
+
     // =================== CREACIÓN DE PANELES ===================
 
     private JPanel createHeader() {
@@ -429,6 +438,7 @@ public class MainWindow extends JFrame {
         startButton = createControlButton("▶ START", new Color(0, 150, 0));
         pauseButton = createControlButton("⏸ PAUSE", new Color(200, 150, 0));
         stepButton = createControlButton("⏭ STEP", new Color(100, 149, 237));
+        resetButton = createControlButton("🔄 RESET", new Color(180, 60, 60));
         generateOneButton = createControlButton("+1", new Color(100, 100, 180));
         generateFiveButton = createControlButton("+5", new Color(150, 100, 200));
         generateTwentyButton = createControlButton("+20", new Color(180, 80, 150));
@@ -440,7 +450,25 @@ public class MainWindow extends JFrame {
         algorithmComboBox.setBackground(new Color(50, 50, 80));
         algorithmComboBox.setForeground(Color.ORANGE);
         algorithmComboBox.setToolTipText("Algoritmo de planificación");
-        speedDownButton = createControlButton("⏪", new Color(80, 80, 120));
+
+        // Panel de velocidad vertical: ▲ [field] ▼
+        speedUpButton = new JButton("▲");
+        speedUpButton.setBackground(new Color(80, 80, 120));
+        speedUpButton.setForeground(Color.WHITE);
+        speedUpButton.setFocusPainted(false);
+        speedUpButton.setFont(new Font("SansSerif", Font.BOLD, 10));
+        speedUpButton.setMargin(new Insets(0, 4, 0, 4));
+        speedUpButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        speedUpButton.setPreferredSize(new Dimension(40, 14));
+
+        speedDownButton = new JButton("▼");
+        speedDownButton.setBackground(new Color(80, 80, 120));
+        speedDownButton.setForeground(Color.WHITE);
+        speedDownButton.setFocusPainted(false);
+        speedDownButton.setFont(new Font("SansSerif", Font.BOLD, 10));
+        speedDownButton.setMargin(new Insets(0, 4, 0, 4));
+        speedDownButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        speedDownButton.setPreferredSize(new Dimension(40, 14));
 
         // Campo de velocidad editable
         speedField = new JTextField("200", 4);
@@ -451,18 +479,26 @@ public class MainWindow extends JFrame {
         speedField.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 120)));
         speedField.setToolTipText("Velocidad en ms (10-2000)");
 
-        speedUpButton = createControlButton("⏩", new Color(80, 80, 120));
+        // Mini panel vertical para flechas + campo de velocidad
+        JPanel speedArrowPanel = new JPanel(new GridLayout(2, 1, 0, 1));
+        speedArrowPanel.setBackground(COLOR_PANEL);
+        speedArrowPanel.add(speedUpButton);
+        speedArrowPanel.add(speedDownButton);
+
+        JPanel speedPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 2, 0));
+        speedPanel.setBackground(COLOR_PANEL);
+        speedPanel.add(speedArrowPanel);
+        speedPanel.add(speedField);
 
         controlPanel.add(startButton);
         controlPanel.add(pauseButton);
         controlPanel.add(stepButton);
+        controlPanel.add(resetButton);
         controlPanel.add(generateOneButton);
         controlPanel.add(generateFiveButton);
         controlPanel.add(generateTwentyButton);
         controlPanel.add(algorithmComboBox);
-        controlPanel.add(speedDownButton);
-        controlPanel.add(speedField);
-        controlPanel.add(speedUpButton);
+        controlPanel.add(speedPanel);
 
         // Panel derecho con clock y modo CPU
         JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 5));

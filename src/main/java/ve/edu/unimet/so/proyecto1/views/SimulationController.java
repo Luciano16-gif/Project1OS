@@ -14,7 +14,7 @@ import ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy;
 public class SimulationController {
 
     private final OperatingSystem os;
-    private final ClockThread clock;
+    private ClockThread clock;
     private final MainWindow mainWindow;
 
     // Velocidad actual del ciclo en ms
@@ -54,6 +54,10 @@ public class SimulationController {
 
     public void stopSimulation() {
         clock.stopClock();
+    }
+
+    public void setClock(ClockThread newClock) {
+        this.clock = newClock;
     }
 
     // --- Control de velocidad ---

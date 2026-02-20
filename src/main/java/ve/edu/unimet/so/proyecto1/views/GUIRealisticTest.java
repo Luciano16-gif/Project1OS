@@ -19,7 +19,7 @@ public class GUIRealisticTest {
 
     // Componentes del sistema
     private final OperatingSystem os;
-    private final ClockThread clock;
+    private ClockThread clock;
     private final MainWindow mainWindow;
 
     // Subcomponentes refactorizados
@@ -164,6 +164,11 @@ public class GUIRealisticTest {
             simulationController.setSchedulingAlgorithm(selected);
         });
 
+        // Botón RESET
+        mainWindow.getResetButton().addActionListener(e -> {
+            resetAll();
+        });
+
         // Estado inicial de botones
         mainWindow.getPauseButton().setEnabled(false);
         mainWindow.getStepButton().setEnabled(false);
@@ -181,5 +186,40 @@ public class GUIRealisticTest {
 
     public void show() {
         mainWindow.setVisible(true);
+    }
+
+    private void resetAll() {
+        // 1. Detener el clock actual y sus hilos auxiliares
+        try {
+            clock.stopClock();
+        } catch (Exception ignored) {
+            // Puede lanzar si ya estaba detenido
+        }
+
+        // 2. Resetear todo el estado del OS
+        os.reset();
+
+        // 3. Crear un nuevo ClockThread (Thread de Java no se puede reiniciar)
+        this.clock = new ClockThread(os, simulationController.getCurrentSpeed());
+        simulationController.setClock(this.clock);
+
+        // 4. Regenerar procesos iniciales
+        ProcessGenerator.resetPidCounter();
+        generateInitialProcesses();
+
+        // 5. Re-registrar tareas periódicas
+        registerDefaultPeriodicTasks();
+
+        // 6. Resetear GUI
+        guiUpdater.resetGraphState();
+        mainWindow.clearCpuGraph();
+        mainWindow.getAlgorithmComboBox().setSelectedIndex(0); // FCFS
+
+        // 7. Resetear estado de botones
+        mainWindow.getStartButton().setEnabled(true);
+        mainWindow.getPauseButton().setEnabled(false);
+        mainWindow.getStepButton().setEnabled(false);
+
+        System.out.println("🔄 Simulación reiniciada por completo");
     }
 }
