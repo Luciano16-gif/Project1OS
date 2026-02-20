@@ -43,6 +43,9 @@ public class MainWindow extends JFrame {
     private JButton speedUpButton;
     private JButton speedDownButton;
     private JTextField speedField; // Campo de velocidad del reloj
+    private JButton quantumUpButton;
+    private JButton quantumDownButton;
+    private JTextField quantumField; // Campo de quantum (RR)
 
     // --- MODELOS DE TABLAS (AbstractTableModel) ---
     private PCBTableModel newModel;
@@ -155,7 +158,7 @@ public class MainWindow extends JFrame {
                 cpuModeLabel.setForeground(Color.RED);
             }
             case USER_KERNEL -> {
-                cpuModeLabel.setText("MODE: USER/KERNEL");
+                cpuModeLabel.setText("MODE: U/K");
                 cpuModeLabel.setForeground(Color.ORANGE);
             }
             case IDLE -> {
@@ -412,6 +415,22 @@ public class MainWindow extends JFrame {
         speedField.setText(String.valueOf(speedMs));
     }
 
+    public JButton getQuantumUpButton() {
+        return quantumUpButton;
+    }
+
+    public JButton getQuantumDownButton() {
+        return quantumDownButton;
+    }
+
+    public JTextField getQuantumField() {
+        return quantumField;
+    }
+
+    public void updateQuantumField(int quantum) {
+        quantumField.setText(String.valueOf(quantum));
+    }
+
     public JButton getResetButton() {
         return resetButton;
     }
@@ -479,6 +498,34 @@ public class MainWindow extends JFrame {
         speedField.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 120)));
         speedField.setToolTipText("Velocidad en ms (10-2000)");
 
+        // Panel de quantum vertical: ▲ [field] ▼
+        quantumUpButton = new JButton("▲");
+        quantumUpButton.setBackground(new Color(80, 80, 120));
+        quantumUpButton.setForeground(Color.WHITE);
+        quantumUpButton.setFocusPainted(false);
+        quantumUpButton.setFont(new Font("SansSerif", Font.BOLD, 10));
+        quantumUpButton.setMargin(new Insets(0, 4, 0, 4));
+        quantumUpButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        quantumUpButton.setPreferredSize(new Dimension(40, 14));
+
+        quantumDownButton = new JButton("▼");
+        quantumDownButton.setBackground(new Color(80, 80, 120));
+        quantumDownButton.setForeground(Color.WHITE);
+        quantumDownButton.setFocusPainted(false);
+        quantumDownButton.setFont(new Font("SansSerif", Font.BOLD, 10));
+        quantumDownButton.setMargin(new Insets(0, 4, 0, 4));
+        quantumDownButton.setBorder(BorderFactory.createRaisedBevelBorder());
+        quantumDownButton.setPreferredSize(new Dimension(40, 14));
+
+        // Campo de quantum editable
+        quantumField = new JTextField("4", 3);
+        quantumField.setHorizontalAlignment(JTextField.CENTER);
+        quantumField.setFont(new Font("Monospaced", Font.BOLD, 12));
+        quantumField.setBackground(new Color(30, 30, 50));
+        quantumField.setForeground(Color.ORANGE);
+        quantumField.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 120)));
+        quantumField.setToolTipText("Quantum RR (1-100)");
+
         // Mini panel vertical para flechas + campo de velocidad
         JPanel speedArrowPanel = new JPanel(new GridLayout(2, 1, 0, 1));
         speedArrowPanel.setBackground(COLOR_PANEL);
@@ -490,6 +537,16 @@ public class MainWindow extends JFrame {
         speedPanel.add(speedArrowPanel);
         speedPanel.add(speedField);
 
+        JPanel quantumArrowPanel = new JPanel(new GridLayout(2, 1, 0, 1));
+        quantumArrowPanel.setBackground(COLOR_PANEL);
+        quantumArrowPanel.add(quantumUpButton);
+        quantumArrowPanel.add(quantumDownButton);
+
+        JPanel quantumPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 2, 0));
+        quantumPanel.setBackground(COLOR_PANEL);
+        quantumPanel.add(quantumArrowPanel);
+        quantumPanel.add(quantumField);
+
         controlPanel.add(startButton);
         controlPanel.add(pauseButton);
         controlPanel.add(stepButton);
@@ -498,6 +555,7 @@ public class MainWindow extends JFrame {
         controlPanel.add(generateFiveButton);
         controlPanel.add(generateTwentyButton);
         controlPanel.add(algorithmComboBox);
+        controlPanel.add(quantumPanel);
         controlPanel.add(speedPanel);
 
         // Panel derecho con clock y modo CPU

@@ -148,6 +148,26 @@ public class GUIRealisticTest {
             }
         });
 
+        // Botón QUANTUM DOWN
+        mainWindow.getQuantumDownButton().addActionListener(e -> {
+            simulationController.adjustQuantum(-1);
+        });
+
+        // Botón QUANTUM UP
+        mainWindow.getQuantumUpButton().addActionListener(e -> {
+            simulationController.adjustQuantum(1);
+        });
+
+        // Campo de quantum
+        mainWindow.getQuantumField().addActionListener(e -> {
+            try {
+                int newQuantum = Integer.parseInt(mainWindow.getQuantumField().getText().trim());
+                simulationController.setQuantum(newQuantum);
+            } catch (NumberFormatException ex) {
+                mainWindow.updateQuantumField(simulationController.getCurrentQuantum());
+            }
+        });
+
         // Botón de EMERGENCIA
         mainWindow.getEmergencyButton().addActionListener(e -> {
             long currentTick = os.getGlobalTick();
@@ -172,6 +192,8 @@ public class GUIRealisticTest {
         // Estado inicial de botones
         mainWindow.getPauseButton().setEnabled(false);
         mainWindow.getStepButton().setEnabled(false);
+        mainWindow.updateSpeedField(simulationController.getCurrentSpeed());
+        mainWindow.updateQuantumField(simulationController.getCurrentQuantum());
     }
 
     private void setupWindowClosing() {
@@ -214,6 +236,7 @@ public class GUIRealisticTest {
         guiUpdater.resetGraphState();
         mainWindow.clearCpuGraph();
         mainWindow.getAlgorithmComboBox().setSelectedIndex(0); // FCFS
+        mainWindow.updateQuantumField(simulationController.getCurrentQuantum());
 
         // 7. Resetear estado de botones
         mainWindow.getStartButton().setEnabled(true);
