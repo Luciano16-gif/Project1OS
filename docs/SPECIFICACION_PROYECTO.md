@@ -108,10 +108,13 @@ Orden del ciclo por tick (KernelClockThread):
 
 **Tiempo real**
 
-- int priority (convención: número mayor = más prioridad)
+- int basePriority (prioridad original configurada)
+- int effectivePriority (prioridad usada en runtime; la GUI muestra esta)
 - long arrivalTick
 - long deadlineTick (absoluta)
+- long virtualDeadlineTick (usada por recovery en EDF)
 - boolean deadlineMissed
+- boolean recoveryBoostApplied
 
 **I/O simplificada**
 
@@ -458,8 +461,13 @@ Cada tick:
   - deadlineMissed = true
   - log 1 vez: “Deadline miss…”
 
-El proceso continúa, pero cuenta como fallo de misión.
-**Nota:** decisión final pendiente; por defecto se mantiene fail-soft hasta confirmación.
+El proceso continúa (fail-soft), pero cuenta como fallo de misión.
+
+Politica actual de recovery (definida):
+- El algoritmo activo (FCFS/RR/SRT/PRIORITY/EDF) sigue siendo la regla principal.
+- Recovery actúa como capa secundaria (ajustes por algoritmo, no scheduler nuevo global).
+- `effectivePriority` y `virtualDeadlineTick` pueden cambiar por recovery; `basePriority` no cambia.
+- No hay decaimiento automático del boost de recovery en la version actual.
 
 ---
 
