@@ -31,6 +31,15 @@ public class EventQueue {
         }
     }
 
+    public void clear() {
+        acquire();
+        try {
+            queue.clear();
+        } finally {
+            lock.release();
+        }
+    }
+
     private void acquire() {
         try {
             lock.acquire();

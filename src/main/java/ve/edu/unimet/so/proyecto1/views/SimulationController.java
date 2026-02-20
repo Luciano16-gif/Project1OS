@@ -14,21 +14,25 @@ import ve.edu.unimet.so.proyecto1.kernel.SchedulingPolicy;
 public class SimulationController {
 
     private final OperatingSystem os;
-    private final ClockThread clock;
+    private ClockThread clock;
     private final MainWindow mainWindow;
 
     // Velocidad actual del ciclo en ms
     private int currentCycleDurationMs;
+    private int currentQuantum;
 
     // Límites de velocidad
     private static final int MIN_SPEED_MS = 10;
     private static final int MAX_SPEED_MS = 2000;
+    private static final int MIN_QUANTUM = 1;
+    private static final int MAX_QUANTUM = 100;
 
     public SimulationController(OperatingSystem os, ClockThread clock, MainWindow mainWindow, int initialSpeedMs) {
         this.os = os;
         this.clock = clock;
         this.mainWindow = mainWindow;
         this.currentCycleDurationMs = initialSpeedMs;
+        this.currentQuantum = os.getQuantum();
     }
 
     // --- Control de simulación ---
@@ -54,6 +58,10 @@ public class SimulationController {
 
     public void stopSimulation() {
         clock.stopClock();
+    }
+
+    public void setClock(ClockThread newClock) {
+        this.clock = newClock;
     }
 
     // --- Control de velocidad ---
@@ -85,6 +93,37 @@ public class SimulationController {
 
     public int getCurrentSpeed() {
         return currentCycleDurationMs;
+    }
+
+    // --- Control de quantum ---
+
+    public void adjustQuantum(int delta) {
+        currentQuantum += delta;
+        applyQuantumLimits();
+        os.setQuantum(currentQuantum);
+        mainWindow.updateQuantumField(currentQuantum);
+        System.out.println("⚙ Quantum ajustado: " + currentQuantum + " ticks");
+    }
+
+    public void setQuantum(int quantum) {
+        currentQuantum = quantum;
+        applyQuantumLimits();
+        os.setQuantum(currentQuantum);
+        mainWindow.updateQuantumField(currentQuantum);
+        System.out.println("⚙ Quantum establecido: " + currentQuantum + " ticks");
+    }
+
+    private void applyQuantumLimits() {
+        if (currentQuantum < MIN_QUANTUM) {
+            currentQuantum = MIN_QUANTUM;
+        }
+        if (currentQuantum > MAX_QUANTUM) {
+            currentQuantum = MAX_QUANTUM;
+        }
+    }
+
+    public int getCurrentQuantum() {
+        return currentQuantum;
     }
 
     // --- Control de algoritmo ---

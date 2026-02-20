@@ -108,4 +108,8 @@ public class GUIUpdater {
         int percentage = (residentProcessCount * 100) / maxMemory;
         mainWindow.updateMemory(Math.min(percentage, 100));
     }
+
+    public void resetGraphState() {
+        lastCpuGraphTick = -1;
+    }
 }
